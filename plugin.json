@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/mimusic-org/plugin-toolchain/main/schemas/plugin.schema.json",
+  "name": "小米音箱",
+  "version": "0.1.0",
+  "description": "小米音箱播放歌曲",
+  "author": "hanxi",
+  "homepage": "",
+  "license": "Apache-2.0",
+  "entryPath": "xiaomi",
+  "main": "main.js",
+  "minHostVersion": "1.3.0",
+  "permissions": ["storage","songs.read","songs.write","playlists.read","playlists.write","inter-plugin","command"],
+  "updateUrl": "",
+  "entryHash": "",
+  "zipHash": ""
+}

@@ -1,0 +1,17 @@
+{
+  "name": "xiaomi",
+  "version": "0.1.0",
+  "description": "小米音箱播放歌曲",
+  "private": true,
+  "scripts": {
+    "build": "mimusic-plugin build",
+    "dev": "mimusic-plugin dev",
+    "validate": "mimusic-plugin validate",
+    "publish:release": "mimusic-plugin publish"
+  },
+  "devDependencies": {
+    "@mimusic/plugin-sdk": "^0.4.3",
+    "@mimusic/plugin-builder": "^0.4.3",
+    "typescript": "^5.7.0"
+  }
+}
