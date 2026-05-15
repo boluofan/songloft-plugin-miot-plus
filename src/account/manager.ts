@@ -1,0 +1,218 @@
+// 小米音箱插件 - 账号管理器
+// 管理多个小米账号的生命周期、登录状态和设备列表
+
+import type {
+  AccountConfig,
+  DeviceConfig,
+  MinaDevice,
+  XiaomiTokenInfo,
+} from '../types';
+import { ConfigManager } from '../config/manager';
+
+/** 生成唯一ID: 时间戳base36 + 4位随机hex */
+function generateId(): string {
+  const timePart = Date.now().toString(36);
+  const randPart = Math.floor(Math.random() * 0xffff).toString(16).padStart(4, '0');
+  return timePart + randPart;
+}
+
+/**
+ * 账号管理器
+ * 管理多个小米账号的创建、删除、登录状态和设备列表
+ */
+export class AccountManager {
+  private configManager: ConfigManager;
+  /** accountId → MinaHTTPClient 实例（运行时，不持久化） */
+  private minaClients: Map<string, any>;
+
+  constructor(configManager: ConfigManager) {
+    this.configManager = configManager;
+    this.minaClients = new Map();
+  }
+
+  // ===== 账号生命周期 =====
+
+  /**
+   * 创建新账号
+   * @param account - 小米账号名（用户名/邮箱/手机）
+   * @param authType - 认证类型 "password" | "token" | "qrcode"
+   * @returns 新创建的 AccountConfig
+   */
+  createAccount(account: string, authType: string): AccountConfig {
+    const now = new Date().toISOString();
+    const newAccount: AccountConfig = {
+      id: generateId(),
+      account,
+      auth_type: authType,
+      login_method: authType,
+      password: '',
+      pass_token: '',
+      user_id: '',
+      services: {},
+      devices: [],
+      last_selected_device_id: '',
+      created_at: now,
+      updated_at: now,
+    };
+    this.configManager.addAccount(newAccount);
+    return newAccount;
+  }
+
+  /**
+   * 删除账号
+   * 同时清除运行时的MinaClient实例
+   */
+  deleteAccount(accountId: string): void {
+    this.minaClients.delete(accountId);
+    this.configManager.removeAccount(accountId);
+  }
+
+  /** 获取单个账号配置 */
+  getAccount(accountId: string): AccountConfig | null {
+    return this.configManager.getAccount(accountId);
+  }
+
+  /** 获取所有账号配置 */
+  getAccounts(): AccountConfig[] {
+    return this.configManager.getAccounts();
+  }
+
+  // ===== 登录状态 =====
+
+  /**
+   * 标记账号为已登录
+   * 保存Token信息到持久化存储
+   */
+  setAccountLoggedIn(accountId: string, tokenInfo: XiaomiTokenInfo): void {
+    this.configManager.updateAccount(accountId, {
+      user_id: tokenInfo.user_id,
+      services: tokenInfo.services,
+      auth_type: 'token',
+    });
+  }
+
+  /**
+   * 标记账号为已登出
+   * 清除Token信息和运行时客户端
+   */
+  setAccountLoggedOut(accountId: string): void {
+    this.minaClients.delete(accountId);
+    this.configManager.updateAccount(accountId, {
+      services: {},
+      pass_token: '',
+    });
+  }
+
+  /**
+   * 检查账号是否已登录
+   * 判断依据：至少有一个service token存在
+   */
+  isAccountLoggedIn(accountId: string): boolean {
+    const account = this.configManager.getAccount(accountId);
+    if (!account) return false;
+    return Object.keys(account.services).length > 0;
+  }
+
+  // ===== Mina客户端管理（运行时） =====
+
+  /** 获取账号的MinaHTTPClient实例 */
+  getMinaClient(accountId: string): any | null {
+    return this.minaClients.get(accountId) ?? null;
+  }
+
+  /** 设置账号的MinaHTTPClient实例 */
+  setMinaClient(accountId: string, client: any): void {
+    this.minaClients.set(accountId, client);
+  }
+
+  /** 移除账号的MinaHTTPClient实例 */
+  removeMinaClient(accountId: string): void {
+    this.minaClients.delete(accountId);
+  }
+
+  // ===== 设备管理 =====
+
+  /**
+   * 更新设备列表
+   * 合并API返回的设备信息和本地已有配置
+   * 保留本地设置（managed/volume/playMode等），更新设备基本信息
+   */
+  updateDeviceList(accountId: string, devices: MinaDevice[]): void {
+    const account = this.configManager.getAccount(accountId);
+    if (!account) {
+      throw new Error(`Account not found: ${accountId}`);
+    }
+
+    // 构建现有设备配置的映射
+    const existingMap = new Map<string, DeviceConfig>();
+    for (const dev of account.devices) {
+      existingMap.set(dev.device_id, dev);
+    }
+
+    // 合并：API设备信息 + 本地持久化设置
+    const mergedDevices: DeviceConfig[] = devices.map(apiDev => {
+      const existing = existingMap.get(apiDev.deviceID);
+      return {
+        device_id: apiDev.deviceID,
+        device_name: apiDev.name,
+        model: apiDev.model || '',
+        hardware: apiDev.hardware || '',
+        alias: apiDev.alias || '',
+        // 保留本地设置，新设备使用默认值
+        managed: existing?.managed ?? false,
+        volume: existing?.volume ?? 0,
+        play_mode: existing?.play_mode ?? 'order',
+        playlist_id: existing?.playlist_id ?? 0,
+        current_song_index: existing?.current_song_index ?? 0,
+        last_selected_at: existing?.last_selected_at ?? '',
+      };
+    });
+
+    this.configManager.updateAccount(accountId, { devices: mergedDevices });
+  }
+
+  /**
+   * 获取受管理的设备列表
+   * 过滤 managed === true 的设备
+   */
+  getManagedDevices(accountId: string): DeviceConfig[] {
+    const devices = this.configManager.getDevices(accountId);
+    return devices.filter(d => d.managed);
+  }
+
+  /** 更新特定设备的配置 */
+  updateDeviceConfig(accountId: string, deviceId: string, updates: Partial<DeviceConfig>): void {
+    this.configManager.updateDevice(accountId, deviceId, updates);
+  }
+
+  /** 设置最后选中的设备 */
+  setLastSelectedDevice(accountId: string, deviceId: string): void {
+    this.configManager.setLastSelectedDevice(accountId, deviceId);
+  }
+
+  /** 获取最后选中的设备ID */
+  getLastSelectedDevice(accountId: string): string | null {
+    const account = this.configManager.getAccount(accountId);
+    if (!account) return null;
+    return account.last_selected_device_id || null;
+  }
+
+  // ===== 初始化 =====
+
+  /**
+   * 从storage恢复账号数据
+   * 加载所有已保存的账号配置，但不自动重建MinaHTTPClient
+   * MinaHTTPClient需要后续认证模块根据Token有效性来决定是否重建
+   */
+  init(): void {
+    // 从storage加载账号列表，确认数据可读
+    const accounts = this.configManager.getAccounts();
+    // 清除可能残留的运行时客户端引用
+    this.minaClients.clear();
+
+    // 日志：已加载的账号数量（QuickJS环境使用console.log）
+    if (accounts.length > 0) {
+      console.log(`[AccountManager] Loaded ${accounts.length} account(s) from storage`);
+    }
+  }
+}

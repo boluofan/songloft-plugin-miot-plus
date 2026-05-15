@@ -1,0 +1,269 @@
+// 小米音箱插件 - 定时任务执行器
+// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/schedule/executor.go
+// 解析目标设备，执行 play_playlist/stop/set_volume/set_play_mode 动作
+
+/// <reference types="@mimusic/plugin-sdk" />
+
+import { ConfigManager } from '../config/manager';
+import { AccountManager } from '../account/manager';
+import { MinaService } from '../service/service';
+import { PlaylistManagerMap } from '../player/manager';
+import { IndexingManager } from '../indexing/manager';
+import type { ScheduledTask, TaskLog, TaskTarget, TaskParams, PlayMode } from '../types';
+
+/** 解析后的单个目标设备 */
+interface DeviceTarget {
+  accountId: string;
+  deviceId: string;
+  deviceName: string;
+}
+
+/**
+ * TaskExecutor - 定时任务执行器
+ * 负责解析目标设备、执行具体动作，返回执行日志
+ */
+export class TaskExecutor {
+  private configManager: ConfigManager;
+  private accountManager: AccountManager;
+  private minaService: MinaService;
+  private playlistManagerMap: PlaylistManagerMap;
+  private indexingManager: IndexingManager;
+
+  constructor(
+    configManager: ConfigManager,
+    accountManager: AccountManager,
+    minaService: MinaService,
+    playlistManagerMap: PlaylistManagerMap,
+    indexingManager: IndexingManager,
+  ) {
+    this.configManager = configManager;
+    this.accountManager = accountManager;
+    this.minaService = minaService;
+    this.playlistManagerMap = playlistManagerMap;
+    this.indexingManager = indexingManager;
+  }
+
+  /**
+   * 执行定时任务，返回每个设备的执行日志
+   */
+  execute(task: ScheduledTask): TaskLog[] {
+    const targets = this.resolveTargetDevices(task.target);
+    if (targets.length === 0) {
+      mimusic.log.warn(`[TaskExecutor] 定时任务无目标设备 task_id=${task.id} name=${task.name}`);
+      return [{
+        task_id: task.id,
+        task_name: task.name,
+        action: task.action,
+        success: false,
+        message: '无可用的目标设备',
+        executed_at: new Date().toISOString(),
+      }];
+    }
+
+    const logs: TaskLog[] = [];
+    for (const target of targets) {
+      const log = this.executeOnDevice(task, target);
+      logs.push(log);
+    }
+    return logs;
+  }
+
+  /**
+   * 解析目标设备列表
+   * - all_managed = true: 获取所有账号下的 managed 设备
+   * - 否则使用 devices 列表中的 device_id，遍历所有账号查找对应关系
+   */
+  private resolveTargetDevices(target: TaskTarget): DeviceTarget[] {
+    if (target.all_managed) {
+      return this.getAllManagedDevices();
+    }
+
+    if (!target.devices || target.devices.length === 0) {
+      return [];
+    }
+
+    // devices 是 device_id 列表，需要遍历所有账号找到对应的 accountId
+    const results: DeviceTarget[] = [];
+    const accounts = this.configManager.getAccounts();
+
+    for (const deviceId of target.devices) {
+      let found = false;
+      for (const account of accounts) {
+        const device = account.devices.find(d => d.device_id === deviceId);
+        if (device) {
+          results.push({
+            accountId: account.id,
+            deviceId: device.device_id,
+            deviceName: device.device_name || device.device_id,
+          });
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        mimusic.log.warn(`[TaskExecutor] 未找到设备 device_id=${deviceId}`);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * 获取所有账号下的受管理设备（跨账号）
+   */
+  private getAllManagedDevices(): DeviceTarget[] {
+    const results: DeviceTarget[] = [];
+    const accounts = this.configManager.getAccounts();
+
+    for (const account of accounts) {
+      for (const device of account.devices) {
+        if (device.managed) {
+          results.push({
+            accountId: account.id,
+            deviceId: device.device_id,
+            deviceName: device.device_name || device.device_id,
+          });
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * 在单个设备上执行任务
+   */
+  private executeOnDevice(task: ScheduledTask, target: DeviceTarget): TaskLog {
+    const log: TaskLog = {
+      task_id: task.id,
+      task_name: task.name,
+      action: task.action,
+      success: false,
+      message: '',
+      executed_at: new Date().toISOString(),
+    };
+
+    mimusic.log.info(
+      `[TaskExecutor] 执行定时任务 task_id=${task.id} action=${task.action} account=${target.accountId} device=${target.deviceId}`
+    );
+
+    try {
+      let message: string;
+
+      switch (task.action) {
+        case 'play_playlist':
+          message = this.executePlayPlaylist(target, task.params);
+          break;
+        case 'stop':
+          message = this.executeStop(target);
+          break;
+        case 'set_volume':
+          message = this.executeSetVolume(target, task.params);
+          break;
+        case 'set_play_mode':
+          message = this.executeSetPlayMode(target, task.params);
+          break;
+        default:
+          throw new Error(`未知的动作类型: ${task.action}`);
+      }
+
+      log.success = true;
+      log.message = message;
+      mimusic.log.info(`[TaskExecutor] 定时任务执行成功 task_id=${task.id} device=${target.deviceId}`);
+    } catch (e) {
+      log.success = false;
+      log.message = e instanceof Error ? e.message : String(e);
+      mimusic.log.error(
+        `[TaskExecutor] 定时任务执行失败 task_id=${task.id} device=${target.deviceId} error=${log.message}`
+      );
+    }
+
+    return log;
+  }
+
+  /**
+   * 执行播放歌单动作
+   * 通过歌单名称查找歌单，然后调用 PlaylistManager 播放
+   */
+  private executePlayPlaylist(target: DeviceTarget, params: TaskParams): string {
+    const playlistName = params.playlist_name;
+    if (!playlistName) {
+      throw new Error('未指定歌单名称');
+    }
+
+    // 通过名称查找歌单
+    const playlist = this.indexingManager.findPlaylistByName(playlistName);
+    if (!playlist) {
+      throw new Error(`未找到匹配的歌单: ${playlistName}`);
+    }
+
+    mimusic.log.info(`[TaskExecutor] 匹配到歌单 name=${playlistName} matched=${playlist.name} id=${playlist.id}`);
+
+    // 确定播放模式
+    const playMode: PlayMode = (params.play_mode as PlayMode) || 'order';
+
+    // 获取或创建设备的播放管理器并开始播放
+    const pm = this.playlistManagerMap.getOrCreate(target.accountId, target.deviceId);
+    const ok = pm.play(playlist.id, 0, playMode);
+    if (!ok) {
+      throw new Error(`播放歌单失败: ${playlist.name}`);
+    }
+
+    return `播放歌单「${playlist.name}」成功`;
+  }
+
+  /**
+   * 执行停止播放动作
+   */
+  private executeStop(target: DeviceTarget): string {
+    const pm = this.playlistManagerMap.getOrCreate(target.accountId, target.deviceId);
+    pm.stop();
+    return '停止播放成功';
+  }
+
+  /**
+   * 执行设置音量动作
+   */
+  private executeSetVolume(target: DeviceTarget, params: TaskParams): string {
+    const volume = params.volume;
+    if (volume === undefined || volume === null) {
+      throw new Error('未指定音量值');
+    }
+    if (volume < 0 || volume > 100) {
+      throw new Error(`音量值超出范围: ${volume}`);
+    }
+
+    const ok = this.minaService.setVolume(target.accountId, target.deviceId, volume);
+    if (!ok) {
+      throw new Error('设置音量失败');
+    }
+
+    return `设置音量为 ${volume} 成功`;
+  }
+
+  /**
+   * 执行设置播放模式动作
+   */
+  private executeSetPlayMode(target: DeviceTarget, params: TaskParams): string {
+    const playMode = params.play_mode;
+    if (!playMode) {
+      throw new Error('未指定播放模式');
+    }
+
+    // 优先通过现有播放管理器设置
+    const pm = this.playlistManagerMap.get(target.accountId, target.deviceId);
+    if (pm) {
+      pm.setPlayMode(playMode as PlayMode);
+    } else {
+      // 播放管理器不存在时，直接更新配置
+      try {
+        this.configManager.updateDevice(target.accountId, target.deviceId, {
+          play_mode: playMode,
+        });
+      } catch (e) {
+        throw new Error(`更新播放模式配置失败: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    return `设置播放模式为 ${playMode} 成功`;
+  }
+}

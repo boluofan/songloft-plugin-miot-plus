@@ -1,0 +1,706 @@
+// 小米音箱插件 - 歌单播放管理器
+// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/player/playlist_manager.go
+// 管理播放状态机、播放模式切换、自动切歌
+
+/// <reference types="@mimusic/plugin-sdk" />
+
+import { ConfigManager } from '../config/manager';
+import { MinaService } from '../service/service';
+import { URLBuilder } from './url_builder';
+import { callHostAPI, getHostBaseUrl, getPluginToken } from '../utils/http';
+import type { PlayState, PlayMode, PlayerStatus } from '../types';
+
+// ===== 歌曲类型 =====
+
+/** 歌曲信息（从宿主API返回） */
+interface Song {
+  id: number;
+  type: string;       // "local" | "remote" | "radio"
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;   // 秒
+  file_path: string;
+  url: string;
+  cover_path: string;
+  cover_url: string;
+  lyric: string;
+  lyric_source: string;
+  file_size: number;
+  format: string;
+  bit_rate: number;
+  sample_rate: number;
+  is_live: boolean;
+  cache_hash: string;
+}
+
+/** 宿主API歌单歌曲响应 */
+interface PlaylistSongsResponse {
+  code: number;
+  data: {
+    songs: Song[];
+    total: number;
+  };
+}
+
+// ===== PlaylistManager - 单设备播放管理器 =====
+
+/**
+ * PlaylistManager - 管理单个设备的歌单播放
+ * 实现播放状态机、播放模式切换、定时切歌
+ */
+export class PlaylistManager {
+  private accountId: string;
+  private deviceId: string;
+  private minaService: MinaService;
+  private configManager: ConfigManager;
+
+  private state: PlayState = 'idle';
+  private playMode: PlayMode = 'order';
+  private playlistId: number = 0;
+  private songs: Song[] = [];
+  private currentIndex: number = 0;
+  private checkTimer: any = null;       // 定时器ID（基于歌曲时长的切歌定时器）
+  private totalSongs: number = 0;
+  private playStartTimeMs: number = 0;  // 当前歌曲开始播放的时间戳(ms)
+  private randomPlayed: Set<number> = new Set(); // 随机模式已播放索引
+
+  constructor(
+    accountId: string,
+    deviceId: string,
+    minaService: MinaService,
+    configManager: ConfigManager,
+  ) {
+    this.accountId = accountId;
+    this.deviceId = deviceId;
+    this.minaService = minaService;
+    this.configManager = configManager;
+  }
+
+  // ===== 公开方法 =====
+
+  /**
+   * 播放歌单
+   * @param playlistId - 歌单ID
+   * @param startIndex - 起始歌曲索引（默认0）
+   * @param mode - 播放模式（默认order）
+   * @returns 是否成功
+   */
+  play(playlistId: number, startIndex?: number, mode?: PlayMode): boolean {
+    // 加载歌单歌曲
+    const loaded = this.loadPlaylistSongs(playlistId);
+    if (!loaded) {
+      mimusic.log.error('[PlaylistManager] Failed to load playlist songs: ' + playlistId);
+      return false;
+    }
+
+    if (this.songs.length === 0) {
+      mimusic.log.warn('[PlaylistManager] Playlist is empty: ' + playlistId);
+      return false;
+    }
+
+    // 停止当前播放
+    this.stopCheckTimer();
+
+    // 设置播放参数
+    this.playlistId = playlistId;
+    this.currentIndex = (startIndex !== undefined && startIndex >= 0 && startIndex < this.songs.length)
+      ? startIndex : 0;
+    this.playMode = mode || 'order';
+    this.randomPlayed = new Set();
+
+    // 开始播放当前歌曲
+    const ok = this.playCurrent();
+    if (!ok) {
+      mimusic.log.error('[PlaylistManager] Failed to play current song');
+      return false;
+    }
+
+    // 持久化播放状态到设备配置
+    this.persistState();
+
+    mimusic.log.info(`[PlaylistManager] Playlist started id=${playlistId} index=${this.currentIndex} mode=${this.playMode} total=${this.songs.length}`);
+    return true;
+  }
+
+  /**
+   * 停止播放
+   */
+  stop(): void {
+    this.stopCheckTimer();
+    this.state = 'stopped';
+    this.playStartTimeMs = 0;
+
+    // 调用设备暂停
+    if (this.accountId && this.deviceId) {
+      this.minaService.pausePlay(this.accountId, this.deviceId);
+    }
+
+    mimusic.log.info('[PlaylistManager] Playback stopped');
+  }
+
+  /**
+   * 下一首
+   * @returns 是否成功
+   */
+  next(): boolean {
+    if (this.songs.length === 0) {
+      mimusic.log.warn('[PlaylistManager] No playlist loaded for next');
+      return false;
+    }
+
+    const nextIdx = this.getNextIndex();
+    if (nextIdx < 0) {
+      mimusic.log.info('[PlaylistManager] No next song, stopping');
+      this.stop();
+      return false;
+    }
+
+    this.currentIndex = nextIdx;
+    const ok = this.playCurrent();
+    if (ok) {
+      this.persistState();
+    }
+    return ok;
+  }
+
+  /**
+   * 上一首
+   * @returns 是否成功
+   */
+  previous(): boolean {
+    if (this.songs.length === 0) {
+      mimusic.log.warn('[PlaylistManager] No playlist loaded for previous');
+      return false;
+    }
+
+    const prevIdx = this.getPreviousIndex();
+    if (prevIdx < 0) {
+      mimusic.log.info('[PlaylistManager] No previous song');
+      return false;
+    }
+
+    this.currentIndex = prevIdx;
+    const ok = this.playCurrent();
+    if (ok) {
+      this.persistState();
+    }
+    return ok;
+  }
+
+  /**
+   * 设置播放模式
+   */
+  setPlayMode(mode: PlayMode): void {
+    this.playMode = mode;
+
+    // 切换到随机模式时重置已播放记录
+    if (mode === 'random') {
+      this.randomPlayed = new Set();
+    }
+
+    // 持久化到设备配置
+    try {
+      this.configManager.updateDevice(this.accountId, this.deviceId, {
+        play_mode: mode,
+      });
+    } catch (e) {
+      mimusic.log.warn('[PlaylistManager] Failed to save play mode: ' + String(e));
+    }
+
+    mimusic.log.info('[PlaylistManager] Play mode set to ' + mode);
+  }
+
+  /**
+   * 获取播放状态
+   */
+  getStatus(): PlayerStatus {
+    let currentSong: { id: number; title: string; artist: string } | undefined;
+    if (this.currentIndex >= 0 && this.currentIndex < this.songs.length) {
+      const song = this.songs[this.currentIndex];
+      currentSong = { id: song.id, title: song.title, artist: song.artist };
+    }
+
+    return {
+      state: this.state,
+      play_mode: this.playMode,
+      playlist_id: this.playlistId,
+      current_index: this.currentIndex,
+      current_song: currentSong,
+    };
+  }
+
+  /**
+   * 获取当前歌曲
+   */
+  getCurrentSong(): Song | null {
+    if (this.currentIndex >= 0 && this.currentIndex < this.songs.length) {
+      return this.songs[this.currentIndex];
+    }
+    return null;
+  }
+
+  /**
+   * 是否有播放列表
+   */
+  hasPlaylist(): boolean {
+    return this.songs.length > 0;
+  }
+
+  /**
+   * 是否正在播放
+   */
+  isPlaying(): boolean {
+    return this.state === 'playing';
+  }
+
+  /**
+   * 获取当前播放位置（秒）
+   */
+  getPosition(): number {
+    if (this.state !== 'playing' || this.playStartTimeMs === 0) {
+      return 0;
+    }
+    const elapsed = (Date.now() - this.playStartTimeMs) / 1000;
+    const song = this.getCurrentSong();
+    if (song && song.duration > 0 && elapsed > song.duration) {
+      return song.duration;
+    }
+    return elapsed;
+  }
+
+  /**
+   * 清理定时器
+   */
+  cleanup(): void {
+    this.stopCheckTimer();
+  }
+
+  /**
+   * 使用已有歌曲列表初始化播放列表（恢复用）
+   */
+  initWithSongs(songs: Song[], startIndex: number, playMode: PlayMode, playlistId: number): void {
+    this.songs = songs;
+    this.totalSongs = songs.length;
+    this.currentIndex = (startIndex >= 0 && startIndex < songs.length) ? startIndex : 0;
+    this.playMode = playMode;
+    this.playlistId = playlistId;
+    this.state = 'idle';
+    this.randomPlayed = new Set();
+  }
+
+  // ===== 私有方法 =====
+
+  /**
+   * 加载歌单歌曲（通过宿主API）
+   */
+  private loadPlaylistSongs(playlistId: number): boolean {
+    try {
+      // 注意：callHostAPI 是 async 的，但在 QuickJS 同步上下文中
+      // 这里需要使用同步方式调用。由于 QuickJS 插件运行时的限制，
+      // 我们使用 callHostAPI 并依赖运行时的 pending job 机制
+      // 实际上在 JS 插件中这个方法会被异步调用
+      const path = '/api/v1/playlists/' + playlistId + '/songs?limit=100000';
+
+      // 使用同步版本的host API调用
+      // 在QuickJS环境中，fetch是通过host function实现的，实际上是同步的
+      const hostBaseUrl = getHostBaseUrl();
+      const pluginToken = getPluginToken();
+
+      if (!hostBaseUrl || !pluginToken) {
+        mimusic.log.error('[PlaylistManager] Host URL or token not configured');
+        return false;
+      }
+
+      const url = hostBaseUrl + path;
+      const response = (globalThis as any).__mimusic_fetch_sync?.(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer ' + pluginToken,
+          'Accept': 'application/json',
+        },
+      });
+
+      // 如果同步fetch不可用，回退到使用 mimusic.callRouter（如果可用）
+      if (!response) {
+        // 尝试使用 mimusic.callRouter（宿主提供的同步路由调用）
+        if (typeof (mimusic as any).callRouter === 'function') {
+          const routerResp = (mimusic as any).callRouter('GET', path);
+          if (routerResp && routerResp.success !== false) {
+            const body = typeof routerResp.body === 'string'
+              ? JSON.parse(routerResp.body)
+              : routerResp.body || routerResp;
+            const songs = body.songs || body.data?.songs || [];
+            this.songs = songs;
+            this.totalSongs = songs.length;
+            return songs.length > 0;
+          }
+        }
+        mimusic.log.error('[PlaylistManager] No sync fetch mechanism available');
+        return false;
+      }
+
+      const data = typeof response === 'string' ? JSON.parse(response) : response;
+      const songs = data.songs || data.data?.songs || [];
+      this.songs = songs;
+      this.totalSongs = songs.length;
+      return songs.length > 0;
+    } catch (e) {
+      mimusic.log.error('[PlaylistManager] Failed to load playlist songs: ' + String(e));
+      return false;
+    }
+  }
+
+  /**
+   * 播放当前索引的歌曲
+   */
+  private playCurrent(): boolean {
+    if (this.currentIndex < 0 || this.currentIndex >= this.songs.length) {
+      mimusic.log.error('[PlaylistManager] Invalid current index: ' + this.currentIndex);
+      return false;
+    }
+
+    const song = this.songs[this.currentIndex];
+
+    // 检查服务器地址
+    const serverHost = getHostBaseUrl();
+    if (!serverHost) {
+      mimusic.log.error('[PlaylistManager] Server host not configured');
+      return false;
+    }
+
+    // 构造播放URL
+    const songURL = URLBuilder.buildSongURL(song);
+    if (!songURL) {
+      mimusic.log.error('[PlaylistManager] Failed to build song URL: ' + song.title);
+      return false;
+    }
+
+    mimusic.log.info(`[PlaylistManager] Playing song index=${this.currentIndex} title=${song.title} artist=${song.artist} duration=${song.duration}`);
+
+    // 停止旧定时器
+    this.stopCheckTimer();
+
+    // 调用小爱音箱播放
+    const ok = this.minaService.playURL(this.accountId, this.deviceId, songURL);
+    if (!ok) {
+      mimusic.log.error('[PlaylistManager] Failed to play URL on device');
+      return false;
+    }
+
+    this.state = 'playing';
+    this.playStartTimeMs = Date.now();
+
+    // 如果歌曲时长有效，注册定时器播放下一首
+    if (song.duration > 0) {
+      this.startCheckTimer(song.duration);
+    } else {
+      mimusic.log.warn('[PlaylistManager] Song duration invalid, no auto-next timer: ' + song.duration);
+    }
+
+    return true;
+  }
+
+  /**
+   * 获取下一首索引（根据播放模式）
+   * @returns 下一首索引，-1表示没有下一首
+   */
+  private getNextIndex(): number {
+    const len = this.songs.length;
+    if (len === 0) return -1;
+
+    switch (this.playMode) {
+      case 'order':
+        // 顺序播放：到末尾停止
+        if (this.currentIndex < len - 1) {
+          return this.currentIndex + 1;
+        }
+        return -1; // 没有下一首
+
+      case 'loop':
+        // 列表循环
+        return (this.currentIndex + 1) % len;
+
+      case 'single':
+        // 单曲循环：一直播放当前歌曲
+        return this.currentIndex;
+
+      case 'random':
+        // 随机播放：避免重复直到全部播完
+        this.randomPlayed.add(this.currentIndex);
+
+        // 如果所有歌曲都播放过了，重置
+        if (this.randomPlayed.size >= len) {
+          this.randomPlayed = new Set();
+        }
+
+        // 找到未播放的歌曲
+        const unplayed: number[] = [];
+        for (let i = 0; i < len; i++) {
+          if (!this.randomPlayed.has(i)) {
+            unplayed.push(i);
+          }
+        }
+
+        if (unplayed.length === 0) {
+          return Math.floor(Math.random() * len);
+        }
+
+        return unplayed[Math.floor(Math.random() * unplayed.length)];
+
+      default:
+        return -1;
+    }
+  }
+
+  /**
+   * 获取上一首索引
+   * @returns 上一首索引，-1表示没有上一首
+   */
+  private getPreviousIndex(): number {
+    const len = this.songs.length;
+    if (len === 0) return -1;
+
+    switch (this.playMode) {
+      case 'order':
+        // 顺序播放：到第一首停止
+        if (this.currentIndex > 0) {
+          return this.currentIndex - 1;
+        }
+        return -1;
+
+      case 'loop':
+        // 列表循环：第一首回到最后一首
+        if (this.currentIndex > 0) {
+          return this.currentIndex - 1;
+        }
+        return len - 1;
+
+      case 'single':
+        // 单曲循环：重复当前
+        return this.currentIndex;
+
+      case 'random':
+        // 随机模式：简单返回前一首
+        if (this.currentIndex > 0) {
+          return this.currentIndex - 1;
+        }
+        return len - 1;
+
+      default:
+        if (this.currentIndex > 0) {
+          return this.currentIndex - 1;
+        }
+        return -1;
+    }
+  }
+
+  /**
+   * 启动切歌定时器（基于歌曲时长）
+   * @param durationSec - 歌曲时长（秒）
+   */
+  private startCheckTimer(durationSec: number): void {
+    this.stopCheckTimer();
+
+    const delayMs = Math.floor(durationSec * 1000);
+    mimusic.log.info('[PlaylistManager] Timer registered delayMs=' + delayMs);
+
+    this.checkTimer = setTimeout(() => {
+      this.onSongFinished();
+    }, delayMs);
+  }
+
+  /**
+   * 停止定时器
+   */
+  private stopCheckTimer(): void {
+    if (this.checkTimer !== null) {
+      clearTimeout(this.checkTimer);
+      this.checkTimer = null;
+    }
+  }
+
+  /**
+   * 歌曲播放结束回调
+   */
+  private onSongFinished(): void {
+    if (this.state !== 'playing') {
+      mimusic.log.info('[PlaylistManager] Not playing, skip auto-next');
+      return;
+    }
+
+    const nextIdx = this.getNextIndex();
+    if (nextIdx < 0) {
+      mimusic.log.info('[PlaylistManager] No next song, playback complete');
+      this.state = 'stopped';
+      this.playStartTimeMs = 0;
+      return;
+    }
+
+    this.currentIndex = nextIdx;
+    const ok = this.playCurrent();
+    if (ok) {
+      this.persistState();
+    } else {
+      mimusic.log.error('[PlaylistManager] Auto-next failed, stopping');
+      this.state = 'stopped';
+      this.playStartTimeMs = 0;
+    }
+  }
+
+  /**
+   * 持久化播放状态到设备配置
+   */
+  private persistState(): void {
+    try {
+      this.configManager.updateDevice(this.accountId, this.deviceId, {
+        playlist_id: this.playlistId,
+        current_song_index: this.currentIndex,
+        play_mode: this.playMode,
+      });
+    } catch (e) {
+      mimusic.log.warn('[PlaylistManager] Failed to persist state: ' + String(e));
+    }
+  }
+}
+
+// ===== PlaylistManagerMap - 多设备播放管理器集合 =====
+
+/**
+ * PlaylistManagerMap - 管理多个设备的播放管理器实例
+ * key格式: "accountId:deviceId"
+ */
+export class PlaylistManagerMap {
+  private managers: Map<string, PlaylistManager> = new Map();
+  private minaService: MinaService;
+  private configManager: ConfigManager;
+
+  constructor(minaService: MinaService, configManager: ConfigManager) {
+    this.minaService = minaService;
+    this.configManager = configManager;
+  }
+
+  /**
+   * 获取或创建播放管理器
+   * 若设备配置中存有 playlistId，则自动恢复播放列表（不自动开始播放）
+   */
+  getOrCreate(accountId: string, deviceId: string): PlaylistManager {
+    const key = this.makeKey(accountId, deviceId);
+    const existing = this.managers.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    // 创建新的播放管理器
+    const manager = new PlaylistManager(accountId, deviceId, this.minaService, this.configManager);
+    this.managers.set(key, manager);
+
+    // 尝试从配置中恢复播放列表状态（不自动播放）
+    this.restoreFromConfig(manager, accountId, deviceId);
+
+    return manager;
+  }
+
+  /**
+   * 获取指定设备的管理器（不存在返回null）
+   */
+  get(accountId: string, deviceId: string): PlaylistManager | null {
+    const key = this.makeKey(accountId, deviceId);
+    return this.managers.get(key) ?? null;
+  }
+
+  /**
+   * 移除管理器
+   */
+  remove(accountId: string, deviceId: string): void {
+    const key = this.makeKey(accountId, deviceId);
+    const manager = this.managers.get(key);
+    if (manager) {
+      manager.cleanup();
+    }
+    this.managers.delete(key);
+  }
+
+  /**
+   * 清理所有管理器
+   */
+  cleanup(): void {
+    for (const manager of this.managers.values()) {
+      manager.cleanup();
+    }
+    this.managers.clear();
+  }
+
+  /**
+   * 获取所有管理器的设备Key列表
+   */
+  keys(): string[] {
+    return Array.from(this.managers.keys());
+  }
+
+  // ===== 内部方法 =====
+
+  private makeKey(accountId: string, deviceId: string): string {
+    return accountId + ':' + deviceId;
+  }
+
+  /**
+   * 从配置中恢复播放列表（不自动播放）
+   */
+  private restoreFromConfig(manager: PlaylistManager, accountId: string, deviceId: string): void {
+    try {
+      const devices = this.configManager.getDevices(accountId);
+      const devCfg = devices.find(d => d.device_id === deviceId);
+      if (!devCfg || !devCfg.playlist_id || devCfg.playlist_id <= 0) {
+        return;
+      }
+
+      // 从宿主API加载歌单歌曲
+      const hostBaseUrl = getHostBaseUrl();
+      const pluginToken = getPluginToken();
+      if (!hostBaseUrl || !pluginToken) {
+        return;
+      }
+
+      const path = '/api/v1/playlists/' + devCfg.playlist_id + '/songs?limit=100000';
+
+      let songs: Song[] = [];
+
+      // 尝试通过 mimusic.callRouter 加载
+      if (typeof (mimusic as any).callRouter === 'function') {
+        const routerResp = (mimusic as any).callRouter('GET', path);
+        if (routerResp && routerResp.success !== false) {
+          const body = typeof routerResp.body === 'string'
+            ? JSON.parse(routerResp.body)
+            : routerResp.body || routerResp;
+          songs = body.songs || body.data?.songs || [];
+        }
+      }
+
+      if (songs.length === 0) {
+        // 尝试同步fetch
+        const url = hostBaseUrl + path;
+        const response = (globalThis as any).__mimusic_fetch_sync?.(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': 'Bearer ' + pluginToken,
+            'Accept': 'application/json',
+          },
+        });
+        if (response) {
+          const data = typeof response === 'string' ? JSON.parse(response) : response;
+          songs = data.songs || data.data?.songs || [];
+        }
+      }
+
+      if (songs.length > 0) {
+        const startIndex = devCfg.current_song_index || 0;
+        const playMode = (devCfg.play_mode || 'order') as PlayMode;
+        manager.initWithSongs(songs, startIndex, playMode, devCfg.playlist_id);
+        mimusic.log.info(`[PlaylistManagerMap] Restored playlist from config playlistId=${devCfg.playlist_id} index=${startIndex} mode=${playMode}`);
+      }
+    } catch (e) {
+      mimusic.log.warn('[PlaylistManagerMap] Failed to restore playlist from config: ' + String(e));
+    }
+  }
+}

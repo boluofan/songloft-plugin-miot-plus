@@ -1,0 +1,61 @@
+// 小米音箱插件 - 语音口令 Handler
+// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/handlers/voice_command_handler.go
+
+import { jsonResponse } from '@mimusic/plugin-sdk';
+import type { Router, HTTPRequest } from '@mimusic/plugin-sdk';
+import { ConfigManager } from '../config/manager';
+
+/** 解析请求体（兼容 Uint8Array 和 string） */
+function parseBody(req: HTTPRequest): any {
+  if (!req.body) return {};
+  try {
+    const str = typeof req.body === 'string'
+      ? req.body
+      : String.fromCharCode.apply(null, Array.from(req.body as Uint8Array));
+    return JSON.parse(str);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 注册语音口令相关路由
+ * GET  /voice-commands → 获取语音口令配置
+ * POST /voice-commands → 设置语音口令配置
+ */
+export function registerVoiceCommandHandlers(
+  router: Router,
+  configManager: ConfigManager,
+): void {
+
+  // GET /voice-commands - 获取语音口令配置
+  router.get('/voice-commands', (req: HTTPRequest) => {
+    try {
+      const commands = configManager.getVoiceCommands();
+      const config = configManager.getConfig();
+      return jsonResponse({
+        success: true,
+        data: { enabled: config.voice_command_enabled, commands },
+      });
+    } catch (e: any) {
+      return jsonResponse({ success: false, error: e.message || String(e) });
+    }
+  });
+
+  // POST /voice-commands - 设置语音口令配置
+  router.post('/voice-commands', (req: HTTPRequest) => {
+    try {
+      const body = parseBody(req);
+      const { commands } = body;
+
+      if (!commands || !Array.isArray(commands)) {
+        return jsonResponse({ success: false, error: 'commands array is required' });
+      }
+
+      configManager.saveVoiceCommands(commands);
+      return jsonResponse({ success: true, data: { message: 'voice commands saved', commands } });
+    } catch (e: any) {
+      return jsonResponse({ success: false, error: e.message || String(e) });
+    }
+  });
+}
