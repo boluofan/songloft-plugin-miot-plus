@@ -5,7 +5,7 @@
 
 import { apiGet, apiPost } from './common.js';
 import { showSnackbar, showLoading, hideLoading, showResult, updateControlState, escapeHtml } from './utils.js';
-import { closePlayModePanel, closeVolumePanel, initializePlaybackControls } from './playback.js';
+import { closePlayModePanel, closeVolumePanel, initializePlaybackControls, syncVolumeFromDevice } from './playback.js';
 
 /** 缓存所有账号的设备数据 */
 let allAccountDevices = [];
@@ -134,6 +134,12 @@ export function loadDevices(isInitialLoad = false) {
                     updateCurrentDeviceCard(firstAccount.account_id, firstAccount.last_selected_device_id);
                     updateControlState();
                 }
+            }
+
+            // 设备列表刷新后，根据后端返回的最新 volume 同步音量 UI
+            // 覆盖以下场景：1) 初始加载自动恢复设备 2) AppBar 刷新按钮 3) 已有选中设备时的列表刷新
+            if (window.currentAccountId && window.currentDeviceId) {
+                syncVolumeFromDevice();
             }
 
             showResult(data);

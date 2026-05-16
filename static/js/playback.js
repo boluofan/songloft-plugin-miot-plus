@@ -526,6 +526,44 @@ export function loadDeviceStatus() {
 }
 
 /**
+ * 根据当前选中设备的缓存数据，将音量同步到 UI
+ * 数据源：/mina/devices 接口返回的 device.volume（持久化属性）
+ * 调用时机：设备列表刷新后、设备切换后、初始加载完成后
+ * @param {Object} [options]
+ * @param {boolean} [options.fallbackDefault=false] - 设备不存在或无 volume 字段时是否回退为 50%
+ * @returns {boolean} 是否成功从设备读取并同步了音量
+ */
+export function syncVolumeFromDevice(options) {
+    const opts = options || {};
+    const accountId = getAccountId();
+    if (!accountId) return false;
+    const deviceId = getDeviceId();
+    if (!deviceId) return false;
+
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumePercent = document.getElementById('volumePercent');
+    if (!volumeSlider && !volumePercent) return false;
+
+    const device = getDeviceInfo(accountId, deviceId);
+    if (device && device.volume !== undefined && device.volume !== null) {
+        const vol = parseInt(device.volume);
+        if (volumeSlider) volumeSlider.value = vol;
+        if (volumePercent) volumePercent.textContent = vol + '%';
+        // 记录最后非静音音量，便于静音切换恢复
+        if (vol > 0) lastVolumeBeforeMute = vol;
+        updateVolumeIcon(vol);
+        return true;
+    }
+
+    if (opts.fallbackDefault) {
+        if (volumeSlider) volumeSlider.value = 50;
+        if (volumePercent) volumePercent.textContent = '50%';
+        updateVolumeIcon(50);
+    }
+    return false;
+}
+
+/**
  * 初始化播放控制区域
  * 音量从 mina/devices 中读取（持久化属性），播放状态从 player/status 接口获取
  */
@@ -536,18 +574,7 @@ export function initializePlaybackControls() {
     if (!deviceId) return;
 
     // 从设备信息中读取音量（持久化属性）
-    const device = getDeviceInfo(accountId, deviceId);
-    const volumeSlider = document.getElementById('volumeSlider');
-    const volumePercent = document.getElementById('volumePercent');
-
-    if (device && device.volume !== undefined && device.volume !== null) {
-        if (volumeSlider) volumeSlider.value = device.volume;
-        if (volumePercent) volumePercent.textContent = device.volume + '%';
-    } else {
-        if (volumeSlider) volumeSlider.value = 50;
-        if (volumePercent) volumePercent.textContent = '50%';
-    }
-    updateVolumeIcon();
+    syncVolumeFromDevice({ fallbackDefault: true });
 
     // 播放状态（播放模式、当前歌曲等）从 player/status 接口获取
     loadDeviceStatus();
