@@ -46,8 +46,8 @@ export class TaskExecutor {
   /**
    * 执行定时任务，返回每个设备的执行日志
    */
-  execute(task: ScheduledTask): TaskLog[] {
-    const targets = this.resolveTargetDevices(task.target);
+  async execute(task: ScheduledTask): Promise<TaskLog[]> {
+    const targets = await this.resolveTargetDevices(task.target);
     if (targets.length === 0) {
       mimusic.log.warn(`[TaskExecutor] 定时任务无目标设备 task_id=${task.id} name=${task.name}`);
       return [{
@@ -62,7 +62,7 @@ export class TaskExecutor {
 
     const logs: TaskLog[] = [];
     for (const target of targets) {
-      const log = this.executeOnDevice(task, target);
+      const log = await this.executeOnDevice(task, target);
       logs.push(log);
     }
     return logs;
@@ -73,7 +73,7 @@ export class TaskExecutor {
    * - all_managed = true: 获取所有账号下的 managed 设备
    * - 否则使用 devices 列表中的 device_id，遍历所有账号查找对应关系
    */
-  private resolveTargetDevices(target: TaskTarget): DeviceTarget[] {
+  private async resolveTargetDevices(target: TaskTarget): Promise<DeviceTarget[]> {
     if (target.all_managed) {
       return this.getAllManagedDevices();
     }
@@ -84,7 +84,7 @@ export class TaskExecutor {
 
     // devices 是 [{account_id, device_id}] 对象数组
     const results: DeviceTarget[] = [];
-    const accounts = this.configManager.getAccounts();
+    const accounts = await this.configManager.getAccounts();
 
     for (const dev of target.devices) {
       const { device_id: deviceId, account_id: accountId } = dev;
@@ -137,9 +137,9 @@ export class TaskExecutor {
   /**
    * 获取所有账号下的受管理设备（跨账号）
    */
-  private getAllManagedDevices(): DeviceTarget[] {
+  private async getAllManagedDevices(): Promise<DeviceTarget[]> {
     const results: DeviceTarget[] = [];
-    const accounts = this.configManager.getAccounts();
+    const accounts = await this.configManager.getAccounts();
 
     for (const account of accounts) {
       for (const device of account.devices) {
@@ -158,7 +158,7 @@ export class TaskExecutor {
   /**
    * 在单个设备上执行任务
    */
-  private executeOnDevice(task: ScheduledTask, target: DeviceTarget): TaskLog {
+  private async executeOnDevice(task: ScheduledTask, target: DeviceTarget): Promise<TaskLog> {
     const log: TaskLog = {
       task_id: task.id,
       task_name: task.name,
@@ -177,19 +177,19 @@ export class TaskExecutor {
 
       switch (task.action) {
         case 'play_playlist':
-          message = this.executePlayPlaylist(target, task.params, false);
+          message = await this.executePlayPlaylist(target, task.params, false);
           break;
         case 'play_playlist_from':
-          message = this.executePlayPlaylist(target, task.params, true);
+          message = await this.executePlayPlaylist(target, task.params, true);
           break;
         case 'stop':
-          message = this.executeStop(target);
+          message = await this.executeStop(target);
           break;
         case 'set_volume':
-          message = this.executeSetVolume(target, task.params);
+          message = await this.executeSetVolume(target, task.params);
           break;
         case 'set_play_mode':
-          message = this.executeSetPlayMode(target, task.params);
+          message = await this.executeSetPlayMode(target, task.params);
           break;
         default:
           throw new Error(`未知的动作类型: ${task.action}`);
@@ -214,7 +214,7 @@ export class TaskExecutor {
    * 通过歌单名称查找歌单，然后调用 PlaylistManager 播放
    * @param withSong - 是否从指定歌曲开始播放（play_playlist_from）
    */
-  private executePlayPlaylist(target: DeviceTarget, params: TaskParams, withSong: boolean): string {
+  private async executePlayPlaylist(target: DeviceTarget, params: TaskParams, withSong: boolean): Promise<string> {
     const playlistName = params.playlist_name;
     if (!playlistName) {
       throw new Error('未指定歌单名称');
@@ -235,7 +235,7 @@ export class TaskExecutor {
     // 确定起始位置
     let startIndex = 0;
     if (withSong && params.song_name) {
-      const result = this.indexingManager.findSongInPlaylist(playlist.id, params.song_name);
+      const result = await this.indexingManager.findSongInPlaylist(playlist.id, params.song_name);
       if (result.found) {
         startIndex = result.index;
         mimusic.log.info(`[TaskExecutor] 匹配到歌曲 song_name=${params.song_name} index=${startIndex}`);
@@ -248,8 +248,8 @@ export class TaskExecutor {
     const playMode: PlayMode = (params.play_mode as PlayMode) || 'order';
 
     // 获取或创建设备的播放管理器并开始播放
-    const pm = this.playlistManagerMap.getOrCreate(target.accountId, target.deviceId);
-    const ok = pm.play(playlist.id, startIndex, playMode);
+    const pm = await this.playlistManagerMap.getOrCreate(target.accountId, target.deviceId);
+    const ok = await pm.play(playlist.id, startIndex, playMode);
     if (!ok) {
       throw new Error(`播放歌单失败: ${playlist.name}`);
     }
@@ -263,16 +263,16 @@ export class TaskExecutor {
   /**
    * 执行停止播放动作
    */
-  private executeStop(target: DeviceTarget): string {
-    const pm = this.playlistManagerMap.getOrCreate(target.accountId, target.deviceId);
-    pm.stop();
+  private async executeStop(target: DeviceTarget): Promise<string> {
+    const pm = await this.playlistManagerMap.getOrCreate(target.accountId, target.deviceId);
+    await pm.stop();
     return '停止播放成功';
   }
 
   /**
    * 执行设置音量动作
    */
-  private executeSetVolume(target: DeviceTarget, params: TaskParams): string {
+  private async executeSetVolume(target: DeviceTarget, params: TaskParams): Promise<string> {
     const volume = params.volume;
     if (volume === undefined || volume === null) {
       throw new Error('未指定音量值');
@@ -281,7 +281,7 @@ export class TaskExecutor {
       throw new Error(`音量值超出范围: ${volume}`);
     }
 
-    const ok = this.minaService.setVolume(target.accountId, target.deviceId, volume);
+    const ok = await this.minaService.setVolume(target.accountId, target.deviceId, volume);
     if (!ok) {
       throw new Error('设置音量失败');
     }
@@ -292,7 +292,7 @@ export class TaskExecutor {
   /**
    * 执行设置播放模式动作
    */
-  private executeSetPlayMode(target: DeviceTarget, params: TaskParams): string {
+  private async executeSetPlayMode(target: DeviceTarget, params: TaskParams): Promise<string> {
     const playMode = params.play_mode;
     if (!playMode) {
       throw new Error('未指定播放模式');
@@ -301,11 +301,11 @@ export class TaskExecutor {
     // 优先通过现有播放管理器设置
     const pm = this.playlistManagerMap.get(target.accountId, target.deviceId);
     if (pm) {
-      pm.setPlayMode(playMode as PlayMode);
+      await pm.setPlayMode(playMode as PlayMode);
     } else {
       // 播放管理器不存在时，直接更新配置
       try {
-        this.configManager.updateDevice(target.accountId, target.deviceId, {
+        await this.configManager.updateDevice(target.accountId, target.deviceId, {
           play_mode: playMode,
         });
       } catch (e) {

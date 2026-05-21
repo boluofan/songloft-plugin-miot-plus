@@ -34,37 +34,40 @@ export function registerDeviceHandlers(
 ): void {
 
   // GET /mina/devices - 获取设备列表（按账号分组）
-  router.get('/mina/devices', (req: HTTPRequest) => {
+  router.get('/mina/devices', (async (req: HTTPRequest) => {
     try {
       const query = parseQuery(req.query);
       const accountId = query.account_id;
 
       if (accountId) {
-        const devices = minaService.getDevices(accountId);
+        const devices = await minaService.getDevices(accountId);
         return jsonResponse({ success: true, data: [{ account_id: accountId, devices }] });
       }
 
       // 所有账号的设备
-      const accounts = accountManager.getAccounts();
+      const accounts = await accountManager.getAccounts();
       if (!accounts || accounts.length === 0) {
         // 未配置账号时返回空数组，不报错
         return jsonResponse({ success: true, data: [] });
       }
 
-      const result = accounts.map(acc => ({
-        account_id: acc.id,
-        account_name: acc.account,
-        devices: minaService.getDevices(acc.id),
-        last_selected_device_id: accountManager.getLastSelectedDevice(acc.id) || '',
-      }));
+      const result = [];
+      for (const acc of accounts) {
+        result.push({
+          account_id: acc.id,
+          account_name: acc.account,
+          devices: await minaService.getDevices(acc.id),
+          last_selected_device_id: (await accountManager.getLastSelectedDevice(acc.id)) || '',
+        });
+      }
       return jsonResponse({ success: true, data: result });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /mina/volume - 设置音量
-  router.post('/mina/volume', (req: HTTPRequest) => {
+  router.post('/mina/volume', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account_id, device_id, volume } = body;
@@ -77,7 +80,7 @@ export function registerDeviceHandlers(
       if (volume === undefined || volume === null) {
         return jsonResponse({ success: false, error: 'volume is required' });
       }
-      const ok = minaService.setVolume(account_id, device_id, Number(volume));
+      const ok = await minaService.setVolume(account_id, device_id, Number(volume));
       if (!ok) {
         return jsonResponse({ success: false, error: 'failed to set volume' });
       }
@@ -85,10 +88,10 @@ export function registerDeviceHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /mina/play-url - 播放URL
-  router.post('/mina/play-url', (req: HTTPRequest) => {
+  router.post('/mina/play-url', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account_id, device_id, url } = body;
@@ -98,7 +101,7 @@ export function registerDeviceHandlers(
       if (!device_id || !url) {
         return jsonResponse({ success: false, error: 'device_id and url are required' });
       }
-      const ok = minaService.playURL(account_id, device_id, url);
+      const ok = await minaService.playURL(account_id, device_id, url);
       if (!ok) {
         return jsonResponse({ success: false, error: 'failed to play url' });
       }
@@ -106,10 +109,10 @@ export function registerDeviceHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /mina/device/managed - 更新设备管理状态
-  router.post('/mina/device/managed', (req: HTTPRequest) => {
+  router.post('/mina/device/managed', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account_id, device_id, managed } = body;
@@ -119,7 +122,7 @@ export function registerDeviceHandlers(
       if (!device_id) {
         return jsonResponse({ success: false, error: 'device_id is required' });
       }
-      const ok = minaService.updateManagedStatus(account_id, device_id, !!managed);
+      const ok = await minaService.updateManagedStatus(account_id, device_id, !!managed);
       if (!ok) {
         return jsonResponse({ success: false, error: 'failed to update managed status' });
       }
@@ -130,10 +133,10 @@ export function registerDeviceHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /mina/last_selection - 记录最后选中设备
-  router.post('/mina/last_selection', (req: HTTPRequest) => {
+  router.post('/mina/last_selection', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account_id, device_id } = body;
@@ -143,7 +146,7 @@ export function registerDeviceHandlers(
       if (!device_id) {
         return jsonResponse({ success: false, error: 'device_id is required' });
       }
-      const ok = minaService.updateLastSelection(account_id, device_id);
+      const ok = await minaService.updateLastSelection(account_id, device_id);
       if (!ok) {
         return jsonResponse({ success: false, error: 'failed to update last selection' });
       }
@@ -151,5 +154,5 @@ export function registerDeviceHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 }

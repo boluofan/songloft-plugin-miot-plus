@@ -12,7 +12,7 @@ import { MinaHTTPClient } from '../mina/client';
 // ===== 类型定义 =====
 
 /** 内部回调函数类型 */
-export type ConversationCallback = (msg: ConversationMessage) => void;
+export type ConversationCallback = (msg: ConversationMessage) => void | Promise<void>;
 
 /** 设备监听状态 */
 interface DeviceMonitorState {
@@ -96,20 +96,23 @@ export class ConversationMonitor {
 
     this.enabled = true;
 
-    // 刷新设备列表
-    this.refreshDevices();
-
-    // 标记所有设备为运行中
-    for (const dm of this.devices.values()) {
-      dm.isRunning = true;
-    }
+    // 刷新设备列表（异步，不等待）
+    this.refreshDevices().then(() => {
+      // 标记所有设备为运行中
+      for (const dm of this.devices.values()) {
+        dm.isRunning = true;
+      }
+      mimusic.log.info(`[ConversationMonitor] Started, devices=${this.devices.size} callbacks=${this.callbacks.size}`);
+    }).catch(e => {
+      mimusic.log.error('[ConversationMonitor] refreshDevices error: ' + String(e));
+    });
 
     // 启动定时轮询
     this.pollTimer = setInterval(() => {
-      this.pollAll();
+      this.pollAll().catch(e => {
+        mimusic.log.error('[ConversationMonitor] pollAll error: ' + String(e));
+      });
     }, this.pollInterval);
-
-    mimusic.log.info(`[ConversationMonitor] Started, devices=${this.devices.size} callbacks=${this.callbacks.size}`);
   }
 
   /**
@@ -138,11 +141,11 @@ export class ConversationMonitor {
   /**
    * 刷新设备列表：停止已移除设备的监听，启动新增设备的监听
    */
-  refresh(): void {
+  async refresh(): Promise<void> {
     if (!this.enabled) {
       return;
     }
-    this.refreshDevices();
+    await this.refreshDevices();
   }
 
   /**
@@ -186,8 +189,8 @@ export class ConversationMonitor {
   /**
    * 获取监听器状态（与 WASM 版一致）
    */
-  getStatus(): MonitorStatus {
-    const webhooks = this.configManager.getWebhooks();
+  async getStatus(): Promise<MonitorStatus> {
+    const webhooks = await this.configManager.getWebhooks();
     const devices: DeviceMonitorStatusItem[] = [];
     for (const dm of this.devices.values()) {
       devices.push({
@@ -220,15 +223,15 @@ export class ConversationMonitor {
    * 刷新设备监听列表
    * 合并所有账号的 managed 设备
    */
-  private refreshDevices(): void {
-    const accounts = this.accountManager.getAccounts();
+  private async refreshDevices(): Promise<void> {
+    const accounts = await this.accountManager.getAccounts();
 
     // 构建当前 managed 设备的 key 集合
     const managedKeys = new Set<string>();
     const newDevices: Array<{ accountId: string; deviceId: string; deviceName: string; hardware: string }> = [];
 
     for (const acc of accounts) {
-      const managed = this.accountManager.getManagedDevices(acc.id);
+      const managed = await this.accountManager.getManagedDevices(acc.id);
       for (const dev of managed) {
         const key = this.makeKey(acc.id, dev.device_id);
         managedKeys.add(key);
@@ -269,14 +272,14 @@ export class ConversationMonitor {
   /**
    * 轮询所有设备的对话记录
    */
-  private pollAll(): void {
+  private async pollAll(): Promise<void> {
     if (!this.enabled) {
       return;
     }
 
     for (const dm of this.devices.values()) {
       if (!dm.isRunning) continue;
-      this.pollDevice(dm);
+      await this.pollDevice(dm);
     }
   }
 
@@ -284,7 +287,7 @@ export class ConversationMonitor {
    * 轮询单个设备
    * 获取对话记录 → 时间戳去重 → 触发回调 → 推送 Webhook
    */
-  private pollDevice(dm: DeviceMonitorState): void {
+  private async pollDevice(dm: DeviceMonitorState): Promise<void> {
     // 获取 MinaHTTPClient
     const client = this.accountManager.getMinaClient(dm.accountId) as MinaHTTPClient | null;
     if (!client) {
@@ -294,7 +297,7 @@ export class ConversationMonitor {
     // 获取对话记录（返回 AskMessage[]）
     let askMessages: AskMessage[];
     try {
-      askMessages = client.getLatestAskFromXiaoai(dm.deviceId, dm.hardware, 5);
+      askMessages = await client.getLatestAskFromXiaoai(dm.deviceId, dm.hardware, 5);
     } catch (e) {
       mimusic.log.warn(`[ConversationMonitor] Failed to get conversations: ${dm.deviceId} ${String(e)}`);
       return;
@@ -357,10 +360,10 @@ export class ConversationMonitor {
     mimusic.log.info(`[ConversationMonitor] New messages account=${dm.accountId} device=${dm.deviceId} count=${newMessages.length}`);
 
     // 触发所有内部回调
-    this.notifyCallbacks(newMessages);
+    await this.notifyCallbacks(newMessages);
 
     // 向所有 Webhook 推送
-    this.triggerWebhooks(dm.accountId, dm.deviceId, dm.deviceName, newMessages);
+    await this.triggerWebhooks(dm.accountId, dm.deviceId, dm.deviceName, newMessages);
   }
 
   /**
@@ -377,11 +380,11 @@ export class ConversationMonitor {
   /**
    * 触发所有已注册的内部回调
    */
-  private notifyCallbacks(messages: ConversationMessage[]): void {
+  private async notifyCallbacks(messages: ConversationMessage[]): Promise<void> {
     for (const [name, cb] of this.callbacks.entries()) {
       try {
         for (const msg of messages) {
-          cb(msg);
+          await cb(msg);
         }
       } catch (e) {
         mimusic.log.error(`[ConversationMonitor] Callback error name=${name}: ${String(e)}`);
@@ -393,8 +396,8 @@ export class ConversationMonitor {
    * 触发 Webhook 推送
    * 向所有已注册的 Webhook URL 发送 POST 请求
    */
-  private triggerWebhooks(accountId: string, deviceId: string, deviceName: string, messages: ConversationMessage[]): void {
-    const webhooks = this.configManager.getWebhooks();
+  private async triggerWebhooks(accountId: string, deviceId: string, deviceName: string, messages: ConversationMessage[]): Promise<void> {
+    const webhooks = await this.configManager.getWebhooks();
     if (webhooks.length === 0) {
       return;
     }
@@ -407,21 +410,20 @@ export class ConversationMonitor {
     });
 
     for (const wh of webhooks) {
-      this.sendWebhook(wh, payload);
+      await this.sendWebhook(wh, payload);
     }
   }
 
   /**
    * 向单个 Webhook URL 发送 POST 请求
    */
-  private sendWebhook(wh: WebhookConfig, payload: string): void {
+  private async sendWebhook(wh: WebhookConfig, payload: string): Promise<void> {
     try {
-      const response = fetch(wh.url, {
+      await fetch(wh.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: payload,
       });
-      // fetch 在 QuickJS 中是同步的，直接处理
       mimusic.log.info(`[ConversationMonitor] Webhook sent id=${wh.id} url=${wh.url}`);
     } catch (e) {
       mimusic.log.warn(`[ConversationMonitor] Webhook failed id=${wh.id} url=${wh.url}: ${String(e)}`);

@@ -217,7 +217,7 @@ export class IndexingManager {
    * 刷新索引（从宿主API获取最新数据）
    * @returns 刷新结果
    */
-  refresh(): { success: boolean; songCount: number; playlistCount: number } {
+  async refresh(): Promise<{ success: boolean; songCount: number; playlistCount: number }> {
     if (this.isRefreshing) {
       return { success: false, songCount: this.songs.length, playlistCount: this.playlists.length };
     }
@@ -225,17 +225,17 @@ export class IndexingManager {
     this.isRefreshing = true;
     try {
       // 1. 获取歌单列表（桥接直接返回数组）
-      const rawPlaylists = mimusic.playlists.list() ?? [];
+      const rawPlaylists = (await mimusic.playlists.list()) ?? [];
 
       // 2. 获取歌曲列表（桥接直接返回数组）
-      const rawSongs = mimusic.songs.list({ limit: 10000 }) ?? [];
+      const rawSongs = (await mimusic.songs.list({ limit: 10000 })) ?? [];
 
       // 3. 构建歌单索引
       const newPlaylists: IndexedPlaylist[] = rawPlaylists.map(pl => ({
         id: pl.id,
         name: pl.name,
         nameLower: pl.name.toLowerCase(),
-        songCount: pl.song_count ?? 0,
+        songCount: (pl as any).song_count ?? (pl as any).songCount ?? 0,
       }));
 
       // 4. 构建歌曲索引
@@ -358,7 +358,7 @@ export class IndexingManager {
    * @param songName - 歌曲名称
    * @returns { index, found }，index 为歌曲在歌单中的位置
    */
-  findSongInPlaylist(playlistId: number, songName: string): { index: number; found: boolean } {
+  async findSongInPlaylist(playlistId: number, songName: string): Promise<{ index: number; found: boolean }> {
     if (!this.indexReady || !songName) {
       return { index: 0, found: false };
     }
@@ -366,7 +366,7 @@ export class IndexingManager {
     // 获取歌单歌曲列表
     let songs: Array<{ id: number; title?: string; artist?: string }> = [];
     try {
-      const result = mimusic.playlists.getSongs(playlistId);
+      const result = await mimusic.playlists.getSongs(playlistId);
       if (result && Array.isArray(result)) {
         songs = result;
       }
@@ -403,7 +403,7 @@ export class IndexingManager {
    * @param songName - 歌曲名称关键词
    * @returns 匹配到的歌曲位置，未找到返回 null
    */
-  findSongByName(songName: string): SongLocation | null {
+  async findSongByName(songName: string): Promise<SongLocation | null> {
     if (!this.indexReady || !songName) return null;
 
     // 1. 用内存歌曲索引模糊搜索匹配歌曲
@@ -416,7 +416,7 @@ export class IndexingManager {
     // 2. 遍历歌单，按需加载歌曲列表查找位置
     for (const pl of this.playlists) {
       try {
-        const plSongs = mimusic.playlists.getSongs(pl.id, { limit: 100000 }) ?? [];
+        const plSongs = (await mimusic.playlists.getSongs(pl.id, { limit: 100000 } as any)) ?? [];
         for (let idx = 0; idx < plSongs.length; idx++) {
           if (matchedSongIds.has(plSongs[idx].id)) {
             return {

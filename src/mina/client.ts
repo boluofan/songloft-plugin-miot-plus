@@ -25,9 +25,9 @@ import type { DeviceInfoRaw, DeviceListResponse, UbusResponse, NlpResultData, Nl
 export class MinaHTTPClient {
   private tokenInfo: XiaomiTokenInfo;
   private userAgent: string;
-  private onTokenExpired?: () => boolean;
+  private onTokenExpired?: () => Promise<boolean>;
 
-  constructor(tokenInfo: XiaomiTokenInfo, onTokenExpired?: () => boolean) {
+  constructor(tokenInfo: XiaomiTokenInfo, onTokenExpired?: () => Promise<boolean>) {
     this.tokenInfo = tokenInfo;
     this.userAgent = formatUserAgent(tokenInfo.device_id);
     this.onTokenExpired = onTokenExpired;
@@ -70,7 +70,7 @@ export class MinaHTTPClient {
   }
 
   /** 设置 token 过期回调 */
-  setOnTokenExpired(fn: () => boolean): void {
+  setOnTokenExpired(fn: () => Promise<boolean>): void {
     this.onTokenExpired = fn;
   }
 
@@ -88,9 +88,9 @@ export class MinaHTTPClient {
   /**
    * 获取设备列表
    */
-  getDeviceList(): MinaDevice[] {
+  async getDeviceList(): Promise<MinaDevice[]> {
     const apiUrl = `${MINA_API_BASE_URL}/admin/v2/device_list?master=1`;
-    const result = this.doGetRequest<DeviceListResponse>(apiUrl);
+    const result = await this.doGetRequest<DeviceListResponse>(apiUrl);
     if (!result || result.code !== 0 || !result.data) {
       return [];
     }
@@ -114,7 +114,7 @@ export class MinaHTTPClient {
    * @param url - 音频 URL
    * @param hardware - 设备硬件型号（用于选择播放方法）
    */
-  playByUrl(deviceId: string, url: string, hardware = ''): boolean {
+  async playByUrl(deviceId: string, url: string, hardware = ''): Promise<boolean> {
     if (hardware && needUsePlayMusicAPI(hardware)) {
       return this.playByMusicURL(deviceId, url);
     }
@@ -124,15 +124,15 @@ export class MinaHTTPClient {
   /**
    * 使用 player_play_url 播放 URL
    */
-  playURL(deviceId: string, url: string): boolean {
+  async playURL(deviceId: string, url: string): Promise<boolean> {
     const message = { url, type: 1 };
-    return this.ubusRequest(deviceId, 'player_play_url', 'mediaplayer', message) !== null;
+    return (await this.ubusRequest(deviceId, 'player_play_url', 'mediaplayer', message)) !== null;
   }
 
   /**
    * 使用 player_play_music 播放 URL（用于部分设备型号）
    */
-  playByMusicURL(deviceId: string, audioUrl: string): boolean {
+  async playByMusicURL(deviceId: string, audioUrl: string): Promise<boolean> {
     const audioId = '1582971365183456177';
     const cpId = '355454500';
 
@@ -166,38 +166,38 @@ export class MinaHTTPClient {
       music: JSON.stringify(music),
     };
 
-    return this.ubusRequest(deviceId, 'player_play_music', 'mediaplayer', message) !== null;
+    return (await this.ubusRequest(deviceId, 'player_play_music', 'mediaplayer', message)) !== null;
   }
 
   /**
    * 播放操作（play）
    */
-  playerPlay(deviceId: string): boolean {
+  async playerPlay(deviceId: string): Promise<boolean> {
     const message = { action: 'play', media: 'app_ios' };
-    return this.ubusRequest(deviceId, 'player_play_operation', 'mediaplayer', message) !== null;
+    return (await this.ubusRequest(deviceId, 'player_play_operation', 'mediaplayer', message)) !== null;
   }
 
   /**
    * 暂停播放
    */
-  playerPause(deviceId: string): boolean {
+  async playerPause(deviceId: string): Promise<boolean> {
     const message = { action: 'pause', media: 'app_ios' };
-    return this.ubusRequest(deviceId, 'player_play_operation', 'mediaplayer', message) !== null;
+    return (await this.ubusRequest(deviceId, 'player_play_operation', 'mediaplayer', message)) !== null;
   }
 
   /**
    * 恢复播放
    */
-  playerResume(deviceId: string): boolean {
+  async playerResume(deviceId: string): Promise<boolean> {
     return this.playerPlay(deviceId);
   }
 
   /**
    * 停止播放
    */
-  playerStop(deviceId: string): boolean {
+  async playerStop(deviceId: string): Promise<boolean> {
     const message = { action: 'stop', media: 'app_ios' };
-    return this.ubusRequest(deviceId, 'player_play_operation', 'mediaplayer', message) !== null;
+    return (await this.ubusRequest(deviceId, 'player_play_operation', 'mediaplayer', message)) !== null;
   }
 
   // ===== 音量 =====
@@ -205,17 +205,17 @@ export class MinaHTTPClient {
   /**
    * 设置音量 (0-100)
    */
-  setVolume(deviceId: string, volume: number): boolean {
+  async setVolume(deviceId: string, volume: number): Promise<boolean> {
     const v = Math.max(0, Math.min(100, Math.floor(volume)));
     const message = { volume: v };
-    return this.ubusRequest(deviceId, 'player_set_volume', 'mediaplayer', message) !== null;
+    return (await this.ubusRequest(deviceId, 'player_set_volume', 'mediaplayer', message)) !== null;
   }
 
   /**
    * 获取音量
    */
-  getVolume(deviceId: string): number {
-    const result = this.getPlayerStatus(deviceId);
+  async getVolume(deviceId: string): Promise<number> {
+    const result = await this.getPlayerStatus(deviceId);
     if (result && typeof result.data === 'object' && result.data !== null) {
       const data = result.data as Record<string, unknown>;
       if (typeof data['volume'] === 'number') {
@@ -230,9 +230,9 @@ export class MinaHTTPClient {
   /**
    * 文字转语音
    */
-  textToSpeech(deviceId: string, text: string): boolean {
+  async textToSpeech(deviceId: string, text: string): Promise<boolean> {
     const message = { text };
-    return this.ubusRequest(deviceId, 'player_play_tts', 'mediaplayer', message) !== null;
+    return (await this.ubusRequest(deviceId, 'player_play_tts', 'mediaplayer', message)) !== null;
   }
 
   // ===== 对话记录 =====
@@ -243,11 +243,11 @@ export class MinaHTTPClient {
    * @param hardware - 设备硬件型号
    * @param limit - 记录数量限制（默认2）
    */
-  getLatestAskFromXiaoai(deviceId: string, hardware: string, limit = 2): AskMessage[] {
+  async getLatestAskFromXiaoai(deviceId: string, hardware: string, limit = 2): Promise<AskMessage[]> {
     mimusic.log.info(`[ConversationMonitor] getLatestAskFromXiaoai deviceId=${deviceId} hardware=${hardware} limit=${limit} useMinaForAsk=${shouldUseMinaForAsk(hardware)}`);
     // 部分设备需要通过 ubus 方式获取
     if (shouldUseMinaForAsk(hardware)) {
-      const ubusResult = this.getLatestAskByUbus(deviceId);
+      const ubusResult = await this.getLatestAskByUbus(deviceId);
       mimusic.log.info(`[ConversationMonitor] getLatestAskByUbus result: ${ubusResult ? ubusResult.length : 0} messages`);
       return ubusResult;
     }
@@ -259,7 +259,7 @@ export class MinaHTTPClient {
 
     // 大多数设备通过 xiaoai API 获取，带3次重试
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      const messages = this.doGetLatestAskFromXiaoai(deviceId, apiUrl);
+      const messages = await this.doGetLatestAskFromXiaoai(deviceId, apiUrl);
       if (messages !== null) {
         mimusic.log.info(`[ConversationMonitor] getLatestAskFromXiaoai attempt=${attempt} success, ${messages.length} messages`);
         return messages;
@@ -275,16 +275,16 @@ export class MinaHTTPClient {
   /**
    * 获取播放器状态
    */
-  getPlayerStatus(deviceId: string): UbusResponse | null {
+  async getPlayerStatus(deviceId: string): Promise<UbusResponse | null> {
     return this.ubusRequest(deviceId, 'player_get_play_status', 'mediaplayer', {});
   }
 
   /**
    * 验证 Token 有效性（通过调用 API）
    */
-  validateToken(): boolean {
+  async validateToken(): Promise<boolean> {
     try {
-      const devices = this.getDeviceList();
+      const devices = await this.getDeviceList();
       return devices !== null;
     } catch {
       return false;
@@ -322,7 +322,7 @@ export class MinaHTTPClient {
   /**
    * 执行 UBus 请求
    */
-  ubusRequest(deviceId: string, method: string, path: string, message: Record<string, unknown>): UbusResponse | null {
+  async ubusRequest(deviceId: string, method: string, path: string, message: Record<string, unknown>): Promise<UbusResponse | null> {
     const apiUrl = `${MINA_API_BASE_URL}/remote/ubus`;
     const requestId = this.generateRequestId();
 
@@ -338,7 +338,7 @@ export class MinaHTTPClient {
       .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
       .join('&');
 
-    const result = this.doPostRequest<UbusResponse>(apiUrl, body);
+    const result = await this.doPostRequest<UbusResponse>(apiUrl, body);
 
     // 如果401并且有回调，尝试刷新
     if (result === null) {
@@ -356,15 +356,15 @@ export class MinaHTTPClient {
   /**
    * 执行 GET 请求（带401重试）
    */
-  private doGetRequest<T>(url: string): T | null {
+  private async doGetRequest<T>(url: string): Promise<T | null> {
     const headers: Record<string, string> = {
       'User-Agent': this.userAgent,
       'Cookie': this.buildApiCookies(),
     };
 
-    let response: Response;
+    let response: any;
     try {
-      const fetchResult = fetchWithRedirects(url, { method: 'GET', headers }, new CookieJar(), 0) as any;
+      const fetchResult = await fetchWithRedirects(url, { method: 'GET', headers }, new CookieJar(), 0);
       response = fetchResult.response;
     } catch {
       return null;
@@ -373,12 +373,12 @@ export class MinaHTTPClient {
     // 401 处理
     if (response.status === 401) {
       if (this.onTokenExpired) {
-        const refreshed = this.onTokenExpired();
+        const refreshed = await this.onTokenExpired();
         if (refreshed) {
           // 重试
           headers['Cookie'] = this.buildApiCookies();
           try {
-            const retryResult = fetchWithRedirects(url, { method: 'GET', headers }, new CookieJar(), 0) as any;
+            const retryResult = await fetchWithRedirects(url, { method: 'GET', headers }, new CookieJar(), 0);
             response = retryResult.response;
           } catch {
             return null;
@@ -393,7 +393,7 @@ export class MinaHTTPClient {
     }
 
     try {
-      const text = (response as any).text() as string;
+      const text = response.text() as string;
       return JSON.parse(text) as T;
     } catch {
       return null;
@@ -403,16 +403,16 @@ export class MinaHTTPClient {
   /**
    * 执行 POST 请求（带401重试）
    */
-  private doPostRequest<T>(url: string, body: string): T | null {
+  private async doPostRequest<T>(url: string, body: string): Promise<T | null> {
     const headers: Record<string, string> = {
       'User-Agent': this.userAgent,
       'Content-Type': 'application/x-www-form-urlencoded',
       'Cookie': this.buildApiCookies(),
     };
 
-    let response: Response;
+    let response: any;
     try {
-      const fetchResult = fetchWithRedirects(url, { method: 'POST', headers, body }, new CookieJar(), 0) as any;
+      const fetchResult = await fetchWithRedirects(url, { method: 'POST', headers, body }, new CookieJar(), 0);
       response = fetchResult.response;
     } catch {
       return null;
@@ -421,12 +421,12 @@ export class MinaHTTPClient {
     // 401 处理
     if (response.status === 401) {
       if (this.onTokenExpired) {
-        const refreshed = this.onTokenExpired();
+        const refreshed = await this.onTokenExpired();
         if (refreshed) {
           // 重试
           headers['Cookie'] = this.buildApiCookies();
           try {
-            const retryResult = fetchWithRedirects(url, { method: 'POST', headers, body }, new CookieJar(), 0) as any;
+            const retryResult = await fetchWithRedirects(url, { method: 'POST', headers, body }, new CookieJar(), 0);
             response = retryResult.response;
           } catch {
             return null;
@@ -441,7 +441,7 @@ export class MinaHTTPClient {
     }
 
     try {
-      const text = (response as any).text() as string;
+      const text = response.text() as string;
       return JSON.parse(text) as T;
     } catch {
       return null;
@@ -451,16 +451,16 @@ export class MinaHTTPClient {
   /**
    * 通过 xiaoai API 获取对话记录
    */
-  private doGetLatestAskFromXiaoai(deviceId: string, apiUrl: string): AskMessage[] | null {
+  private async doGetLatestAskFromXiaoai(deviceId: string, apiUrl: string): Promise<AskMessage[] | null> {
 
     const headers: Record<string, string> = {
       'User-Agent': this.userAgent,
       'Cookie': this.buildApiCookies() + `; deviceId=${deviceId}`,
     };
 
-    let response: Response;
+    let response: any;
     try {
-      const fetchResult = fetchWithRedirects(apiUrl, { method: 'GET', headers }, new CookieJar(), 0) as any;
+      const fetchResult = await fetchWithRedirects(apiUrl, { method: 'GET', headers }, new CookieJar(), 0);
       response = fetchResult.response;
     } catch (e) {
       mimusic.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai fetch error: ${String(e)}`);
@@ -472,7 +472,7 @@ export class MinaHTTPClient {
     if (response.status === 401) {
       mimusic.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai 401 token expired`);
       if (this.onTokenExpired) {
-        this.onTokenExpired();
+        await this.onTokenExpired();
       }
       return null;
     }
@@ -483,7 +483,7 @@ export class MinaHTTPClient {
     }
 
     try {
-      const text = (response as any).text() as string;
+      const text = response.text() as string;
       // 打印原始响应体（最多 1000 字符）
       mimusic.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai raw response (${text.length} chars): ${text.substring(0, 1000)}`);
 
@@ -529,8 +529,8 @@ export class MinaHTTPClient {
    * 通过 UBus nlp_result_get 获取对话记录
    * 用于不支持 xiaoai API 的设备（如 M01）
    */
-  private getLatestAskByUbus(deviceId: string): AskMessage[] {
-    const result = this.ubusRequest(deviceId, 'nlp_result_get', 'mibrain', {});
+  private async getLatestAskByUbus(deviceId: string): Promise<AskMessage[]> {
+    const result = await this.ubusRequest(deviceId, 'nlp_result_get', 'mibrain', {});
     if (!result || !result.data) return [];
 
     try {

@@ -33,24 +33,24 @@ export function registerAccountHandlers(
 ): void {
 
   // POST /accounts - 创建账号
-  router.post('/accounts', (req: HTTPRequest) => {
+  router.post('/accounts', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account, auth_type } = body;
       if (!account) {
         return jsonResponse({ success: false, error: 'account is required' });
       }
-      const acc = accountManager.createAccount(account, auth_type || 'password');
+      const acc = await accountManager.createAccount(account, auth_type || 'password');
       return jsonResponse({ success: true, data: acc });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // GET /accounts - 获取账号列表（敏感信息脱敏）
-  router.get('/accounts', (req: HTTPRequest) => {
+  router.get('/accounts', (async (req: HTTPRequest) => {
     try {
-      const accounts = accountManager.getAccounts();
+      const accounts = await accountManager.getAccounts();
       const safeAccounts = accounts.map(a => ({
         ...a,
         password: a.password ? '***' : '',
@@ -65,17 +65,17 @@ export function registerAccountHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // GET /account - 获取单个账号
-  router.get('/account', (req: HTTPRequest) => {
+  router.get('/account', (async (req: HTTPRequest) => {
     try {
       const query = parseQuery(req.query);
       const accountId = query.account_id;
       if (!accountId) {
         return jsonResponse({ success: false, error: 'account_id is required' });
       }
-      const acc = accountManager.getAccount(accountId);
+      const acc = await accountManager.getAccount(accountId);
       if (!acc) {
         return jsonResponse({ success: false, error: 'account not found' });
       }
@@ -93,20 +93,20 @@ export function registerAccountHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // DELETE /account - 删除账号
-  router.delete('/account', (req: HTTPRequest) => {
+  router.delete('/account', (async (req: HTTPRequest) => {
     try {
       const query = parseQuery(req.query);
       const accountId = query.account_id;
       if (!accountId) {
         return jsonResponse({ success: false, error: 'account_id is required' });
       }
-      accountManager.deleteAccount(accountId);
+      await accountManager.deleteAccount(accountId);
       return jsonResponse({ success: true, data: { message: 'account deleted' } });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 }

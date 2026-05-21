@@ -37,7 +37,7 @@ export function registerAuthHandlers(
 ): void {
 
   // POST /auth/login - 密码登录
-  router.post('/auth/login', (req: HTTPRequest) => {
+  router.post('/auth/login', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account_id, username, password } = body;
@@ -45,45 +45,45 @@ export function registerAuthHandlers(
         return jsonResponse({ success: false, error: 'username and password are required' });
       }
       const accountId = account_id || username;
-      const result = authService.login(accountId, username, password);
+      const result = await authService.login(accountId, username, password);
       return jsonResponse({ success: true, ...result });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /auth/captcha - 提交图形验证码
-  router.post('/auth/captcha', (req: HTTPRequest) => {
+  router.post('/auth/captcha', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account_id, captcha } = body;
       if (!account_id || !captcha) {
         return jsonResponse({ success: false, error: 'account_id and captcha are required' });
       }
-      const result = authService.submitCaptcha(account_id, captcha);
+      const result = await authService.submitCaptcha(account_id, captcha);
       return jsonResponse({ success: true, ...result });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /auth/verify - 提交短信/邮箱验证码
-  router.post('/auth/verify', (req: HTTPRequest) => {
+  router.post('/auth/verify', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account_id, code } = body;
       if (!account_id || !code) {
         return jsonResponse({ success: false, error: 'account_id and code are required' });
       }
-      const result = authService.submitVerifyCode(account_id, code);
+      const result = await authService.submitVerifyCode(account_id, code);
       return jsonResponse({ success: true, ...result });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /auth/token - 手动设置Token
-  router.post('/auth/token', (req: HTTPRequest) => {
+  router.post('/auth/token', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account_id, user_id, pass_token } = body;
@@ -91,35 +91,35 @@ export function registerAuthHandlers(
         return jsonResponse({ success: false, error: 'user_id and pass_token are required' });
       }
       const accountId = account_id || user_id;
-      const result = authService.setToken(accountId, pass_token, user_id);
+      const result = await authService.setToken(accountId, pass_token, user_id);
       return jsonResponse({ success: true, ...result });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // GET /auth/status - 获取认证状态
-  router.get('/auth/status', (req: HTTPRequest) => {
+  router.get('/auth/status', (async (req: HTTPRequest) => {
     try {
       const query = parseQuery(req.query);
       const accountId = query.account_id;
       if (accountId) {
-        const status = authService.getAuthStatus(accountId);
+        const status = await authService.getAuthStatus(accountId);
         return jsonResponse({ success: true, data: [status] });
       }
-      const statuses = authService.getAllAuthStatus();
+      const statuses = await authService.getAllAuthStatus();
       return jsonResponse({ success: true, data: statuses });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /auth/qrcode - 启动扫码登录
-  router.post('/auth/qrcode', (req: HTTPRequest) => {
+  router.post('/auth/qrcode', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const accountId = body.account_id || ('qr_' + Date.now());
-      const result = authService.startQRCodeLogin(accountId);
+      const result = await authService.startQRCodeLogin(accountId);
       if (!result) {
         return jsonResponse({ success: false, error: 'failed to get QR code' });
       }
@@ -132,17 +132,17 @@ export function registerAuthHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /auth/qrcode/poll - 轮询扫码状态
-  router.post('/auth/qrcode/poll', (req: HTTPRequest) => {
+  router.post('/auth/qrcode/poll', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account_id } = body;
       if (!account_id) {
         return jsonResponse({ success: false, error: 'account_id is required' });
       }
-      const result = authService.pollQRCode(account_id);
+      const result = await authService.pollQRCode(account_id);
       // 将内部状态映射为前端期望的状态名
       const stateMap: Record<string, string> = {
         'confirmed': 'success',
@@ -159,20 +159,20 @@ export function registerAuthHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /auth/relogin - 强制重新登录
-  router.post('/auth/relogin', (req: HTTPRequest) => {
+  router.post('/auth/relogin', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { account_id } = body;
       if (!account_id) {
         return jsonResponse({ success: false, error: 'account_id is required' });
       }
-      const result = authService.relogin(account_id);
+      const result = await authService.relogin(account_id);
       return jsonResponse({ success: true, ...result });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 }

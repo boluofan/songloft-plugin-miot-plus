@@ -69,7 +69,7 @@ export class MinaAuth {
   /**
    * 登录（首次调用）- 获取 micoapi 的 token
    */
-  login(username: string, password: string): AuthLoginResult {
+  async login(username: string, password: string): Promise<AuthLoginResult> {
     this.username = username;
     this.password = password;
     return this.loginService(MINA_SID);
@@ -78,9 +78,9 @@ export class MinaAuth {
   /**
    * 登录指定服务
    */
-  loginService(sid: string): AuthLoginResult {
+  async loginService(sid: string): Promise<AuthLoginResult> {
     // Step 1: 获取登录签名
-    const step1Result = this.loginStep1(sid);
+    const step1Result = await this.loginStep1(sid);
     if (!step1Result) {
       return { state: LoginState.FAILED, error: 'step1 failed: no response' };
     }
@@ -92,7 +92,7 @@ export class MinaAuth {
   /**
    * 使用图形验证码登录
    */
-  loginWithCaptcha(captcha: string, sid = MINA_SID): AuthLoginResult {
+  async loginWithCaptcha(captcha: string, sid = MINA_SID): Promise<AuthLoginResult> {
     if (!this.loginData) {
       return { state: LoginState.FAILED, error: 'please call login first' };
     }
@@ -102,19 +102,19 @@ export class MinaAuth {
   /**
    * 使用短信/邮箱验证码完成登录
    */
-  loginWithVerifyCode(verifyCode: string, sid = MINA_SID): AuthLoginResult {
+  async loginWithVerifyCode(verifyCode: string, sid = MINA_SID): Promise<AuthLoginResult> {
     if (!this.verifyUrl) {
       return { state: LoginState.FAILED, error: 'no verify url, please call login first' };
     }
 
     // Step 1: 验证短信/邮箱验证码
-    const location = this.verifyTicket(verifyCode);
+    const location = await this.verifyTicket(verifyCode);
     if (!location) {
       return { state: LoginState.FAILED, error: 'verify failed: no location returned' };
     }
 
     // 跟随重定向链收集 passToken、userId 等 cookies
-    this.followRedirectsForCookies(location);
+    await this.followRedirectsForCookies(location);
 
     // Step 2: 用 passToken + userId 调用 serviceLogin 换取 serviceToken
     const passToken = this.cookieJar.getValue('passToken');
@@ -129,7 +129,7 @@ export class MinaAuth {
   /**
    * 获取验证码图片
    */
-  getCaptchaImage(captchaUrl: string): CaptchaResult {
+  async getCaptchaImage(captchaUrl: string): Promise<CaptchaResult> {
     const headers: Record<string, string> = {
       'User-Agent': this.userAgent,
     };
@@ -139,7 +139,7 @@ export class MinaAuth {
       headers['Cookie'] = cookieHeader;
     }
 
-    const response = fetchSync(captchaUrl, {
+    const response = await fetchSync(captchaUrl, {
       method: 'GET',
       headers,
     });
@@ -164,16 +164,16 @@ export class MinaAuth {
    * 提交短信验证码
    * @returns location URL 或空字符串
    */
-  submitSMSCode(notificationUrl: string, code: string): string {
+  async submitSMSCode(notificationUrl: string, code: string): Promise<string> {
     this.verifyUrl = notificationUrl;
-    const location = this.verifyTicket(code);
+    const location = await this.verifyTicket(code);
     return location || '';
   }
 
   /**
    * 通过 passToken 刷新 serviceToken
    */
-  refreshByPassToken(passToken: string, userId: string, sid = MINA_SID): AuthLoginResult {
+  async refreshByPassToken(passToken: string, userId: string, sid = MINA_SID): Promise<AuthLoginResult> {
     return this.exchangeServiceToken(passToken, userId, sid);
   }
 
@@ -181,8 +181,8 @@ export class MinaAuth {
    * serviceLogin（passToken → serviceToken）
    * 用 passToken cookie 调用 serviceLogin 获取 location，再跟随重定向获取 serviceToken
    */
-  serviceLogin(passToken: string, userId: string, sid = MINA_SID): { serviceToken: string; ssecurity: string } | null {
-    const result = this.exchangeServiceToken(passToken, userId, sid);
+  async serviceLogin(passToken: string, userId: string, sid = MINA_SID): Promise<{ serviceToken: string; ssecurity: string } | null> {
+    const result = await this.exchangeServiceToken(passToken, userId, sid);
     if (result.state !== LoginState.SUCCESS || !result.tokenInfo) {
       return null;
     }
@@ -204,7 +204,7 @@ export class MinaAuth {
    * Step1: 获取登录签名
    * GET https://account.xiaomi.com/pass/serviceLogin?sid={sid}&_json=true
    */
-  private loginStep1(sid: string): Record<string, unknown> | null {
+  private async loginStep1(sid: string): Promise<Record<string, unknown> | null> {
     const loginUrl = `${ACCOUNT_BASE_URL}/pass/serviceLogin?sid=${sid}&_json=true`;
 
     const headers: Record<string, string> = {
@@ -217,10 +217,10 @@ export class MinaAuth {
       headers['Cookie'] = headers['Cookie'] + '; ' + cookieHeader;
     }
 
-    const { response } = fetchWithRedirects(loginUrl, {
+    const { response } = await fetchWithRedirects(loginUrl, {
       method: 'GET',
       headers,
-    }, this.cookieJar, 0) as any;
+    }, this.cookieJar, 0);
 
     const bodyText = response.text();
     const jsonStr = stripJsonPrefix(bodyText);
@@ -236,11 +236,11 @@ export class MinaAuth {
    * Step2: 提交密码进行认证
    * POST https://account.xiaomi.com/pass/serviceLoginAuth2?_json=true
    */
-  private loginStep2WithPassword(
+  private async loginStep2WithPassword(
     auth: Record<string, unknown>,
     captcha: string,
     sid: string,
-  ): AuthLoginResult {
+  ): Promise<AuthLoginResult> {
     const loginUrl = `${ACCOUNT_BASE_URL}/pass/serviceLoginAuth2?_json=true`;
 
     // 计算密码 MD5（大写）
@@ -277,11 +277,11 @@ export class MinaAuth {
       headers['Cookie'] = cookieStr;
     }
 
-    const { response } = fetchWithRedirects(loginUrl, {
+    const { response } = await fetchWithRedirects(loginUrl, {
       method: 'POST',
       headers,
       body,
-    }, this.cookieJar, 0) as any;
+    }, this.cookieJar, 0);
 
     const bodyText = response.text();
     const jsonStr = stripJsonPrefix(bodyText);
@@ -316,7 +316,7 @@ export class MinaAuth {
         captchaUrl = ACCOUNT_BASE_URL + captchaUrl;
       }
 
-      const captchaResult = this.getCaptchaImage(captchaUrl);
+      const captchaResult = await this.getCaptchaImage(captchaUrl);
       return {
         state: LoginState.NEED_CAPTCHA,
         captchaImage: captchaResult.imageBase64,
@@ -346,7 +346,7 @@ export class MinaAuth {
     const locationWithSign = location + '&clientSign=' + encodeURIComponent(clientSign);
 
     // Step 3: 获取 serviceToken
-    const step3Error = this.loginStep3(locationWithSign, sid, ssecurity);
+    const step3Error = await this.loginStep3(locationWithSign, sid, ssecurity);
     if (step3Error) {
       return { state: LoginState.FAILED, error: `step3 failed: ${step3Error}` };
     }
@@ -364,7 +364,7 @@ export class MinaAuth {
    * 访问 location URL，自动跟随重定向，从 Cookie 中收集 serviceToken
    * 携带登录过程中积累的 cookies（deviceId、sdkVersion 等），与 WASM 版本保持一致
    */
-  private loginStep3(location: string, sid: string, ssecurityFromStep2 = ''): string | null {
+  private async loginStep3(location: string, sid: string, ssecurityFromStep2 = ''): Promise<string | null> {
     const headers: Record<string, string> = {
       'User-Agent': this.userAgent,
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -375,10 +375,10 @@ export class MinaAuth {
 
     // 使用 fetchWithRedirects 自动跟随重定向链并携带 cookieJar 中的 cookies
     // 这与 WASM 版本的行为一致（WASM 版使用 autoRedirectClient + 全部 cookies）
-    const { response: finalResponse } = fetchWithRedirects(location, {
+    const { response: finalResponse } = await fetchWithRedirects(location, {
       method: 'GET',
       headers,
-    }, this.cookieJar, MAX_REDIRECTS) as any;
+    }, this.cookieJar, MAX_REDIRECTS);
 
     console.log(`[loginStep3] STS response status: ${finalResponse.status}`);
 
@@ -410,7 +410,7 @@ export class MinaAuth {
   /**
    * 用 passToken 通过 serviceLogin 换取指定服务的 serviceToken
    */
-  private exchangeServiceToken(passToken: string, userId: string, sid: string): AuthLoginResult {
+  private async exchangeServiceToken(passToken: string, userId: string, sid: string): Promise<AuthLoginResult> {
     const serviceLoginUrl = `${ACCOUNT_BASE_URL}/pass/serviceLogin?sid=${sid}&_json=true`;
 
     // 构建 cookies
@@ -431,10 +431,10 @@ export class MinaAuth {
       'Cookie': cookieParts.join('; '),
     };
 
-    const { response } = fetchWithRedirects(serviceLoginUrl, {
+    const { response } = await fetchWithRedirects(serviceLoginUrl, {
       method: 'GET',
       headers,
-    }, this.cookieJar, 0) as any;
+    }, this.cookieJar, 0);
 
     const bodyText = response.text();
     const jsonStr = stripJsonPrefix(bodyText);
@@ -474,7 +474,7 @@ export class MinaAuth {
     const locationWithSign = location + '&clientSign=' + encodeURIComponent(clientSign);
 
     // Step 3: 访问 location URL 获取 serviceToken
-    const step3Error = this.loginStep3(locationWithSign, sid, ssecurity);
+    const step3Error = await this.loginStep3(locationWithSign, sid, ssecurity);
     if (step3Error) {
       return { state: LoginState.FAILED, error: `step3 failed: ${step3Error}` };
     }
@@ -489,10 +489,10 @@ export class MinaAuth {
   /**
    * 验证短信/邮箱验证码
    */
-  private verifyTicket(ticket: string): string | null {
+  private async verifyTicket(ticket: string): Promise<string | null> {
     // 如果是身份验证类型的URL，先获取 identity_session
     if (this.verifyUrl.includes('/fe/service/identity/authStart')) {
-      this.checkIdentityList();
+      await this.checkIdentityList();
     }
 
     // 根据 verifyURL 判断是手机还是邮箱
@@ -523,11 +523,11 @@ export class MinaAuth {
       headers['Cookie'] = cookieStr;
     }
 
-    const { response } = fetchWithRedirects(apiUrl, {
+    const { response } = await fetchWithRedirects(apiUrl, {
       method: 'POST',
       headers,
       body,
-    }, this.cookieJar, 0) as any;
+    }, this.cookieJar, 0);
 
     const bodyText = response.text();
     const jsonStr = stripJsonPrefix(bodyText);
@@ -546,7 +546,7 @@ export class MinaAuth {
   /**
    * 检查身份验证列表并获取 identity_session
    */
-  private checkIdentityList(): void {
+  private async checkIdentityList(): Promise<void> {
     const listUrl = this.verifyUrl.replace('/fe/service/identity/authStart', '/identity/list');
 
     const headers: Record<string, string> = {
@@ -559,7 +559,7 @@ export class MinaAuth {
     }
 
     try {
-      fetchWithRedirects(listUrl, { method: 'GET', headers }, this.cookieJar, 0);
+      await fetchWithRedirects(listUrl, { method: 'GET', headers }, this.cookieJar, 0);
     } catch {
       // non-fatal, ignore
     }
@@ -568,14 +568,14 @@ export class MinaAuth {
   /**
    * 跟随重定向链收集 cookies（特别是 passToken、userId）
    */
-  private followRedirectsForCookies(location: string): void {
+  private async followRedirectsForCookies(location: string): Promise<void> {
     const headers: Record<string, string> = {
       'User-Agent': this.userAgent,
       'Content-Type': 'application/x-www-form-urlencoded',
     };
 
     try {
-      fetchWithRedirects(location, { method: 'GET', headers }, this.cookieJar, MAX_REDIRECTS);
+      await fetchWithRedirects(location, { method: 'GET', headers }, this.cookieJar, MAX_REDIRECTS);
     } catch {
       // non-fatal, passToken might already be obtained
     }

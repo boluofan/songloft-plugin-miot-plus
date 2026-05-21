@@ -106,10 +106,10 @@ export function registerScheduleHandlers(
 ): void {
 
   // GET /schedules - 获取定时任务列表
-  router.get('/schedules', (req: HTTPRequest) => {
+  router.get('/schedules', (async (req: HTTPRequest) => {
     try {
-      const tasks = configManager.getScheduledTasks();
-      const config = configManager.getConfig();
+      const tasks = await configManager.getScheduledTasks();
+      const config = await configManager.getConfig();
       return jsonResponse({
         success: true,
         data: { enabled: config.scheduled_tasks_enabled, tasks },
@@ -117,10 +117,10 @@ export function registerScheduleHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /schedules - 添加定时任务
-  router.post('/schedules', (req: HTTPRequest) => {
+  router.post('/schedules', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { name, action, schedule, target, params, enabled } = body;
@@ -164,15 +164,15 @@ export function registerScheduleHandlers(
         updated_at: now,
       };
 
-      configManager.addScheduledTask(task);
+      await configManager.addScheduledTask(task);
       return jsonResponse({ success: true, data: task });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /schedules/update - 更新定时任务
-  router.post('/schedules/update', (req: HTTPRequest) => {
+  router.post('/schedules/update', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { id, name, action, schedule, target, params, enabled } = body;
@@ -204,7 +204,7 @@ export function registerScheduleHandlers(
         return jsonResponse({ success: false, error: targetErr });
       }
 
-      configManager.updateScheduledTask(id, {
+      await configManager.updateScheduledTask(id, {
         name,
         enabled: enabled !== false,
         action,
@@ -216,40 +216,40 @@ export function registerScheduleHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // DELETE /schedules - 删除定时任务
-  router.delete('/schedules', (req: HTTPRequest) => {
+  router.delete('/schedules', (async (req: HTTPRequest) => {
     try {
       const query = parseQuery(req.query);
       const id = query.id;
       if (!id) {
         return jsonResponse({ success: false, error: '缺少任务 ID 参数' });
       }
-      configManager.removeScheduledTask(id);
+      await configManager.removeScheduledTask(id);
       return jsonResponse({ success: true, data: { message: 'task deleted' } });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /schedules/toggle - 切换定时任务启用状态
-  router.post('/schedules/toggle', (req: HTTPRequest) => {
+  router.post('/schedules/toggle', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { id, enabled } = body;
       if (!id) {
         return jsonResponse({ success: false, error: '缺少任务 ID' });
       }
-      configManager.updateScheduledTask(id, { enabled: !!enabled });
+      await configManager.updateScheduledTask(id, { enabled: !!enabled });
       return jsonResponse({ success: true, data: { message: 'task toggled' } });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // GET /schedules/logs - 获取执行日志
-  router.get('/schedules/logs', (req: HTTPRequest) => {
+  router.get('/schedules/logs', (async (req: HTTPRequest) => {
     try {
       const query = parseQuery(req.query);
       const limit = query.limit ? Number(query.limit) : 50;
@@ -258,5 +258,5 @@ export function registerScheduleHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 }

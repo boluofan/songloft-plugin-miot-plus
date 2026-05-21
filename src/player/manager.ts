@@ -86,9 +86,9 @@ export class PlaylistManager {
    * @param mode - 播放模式（默认order）
    * @returns 是否成功
    */
-  play(playlistId: number, startIndex?: number, mode?: PlayMode): boolean {
+  async play(playlistId: number, startIndex?: number, mode?: PlayMode): Promise<boolean> {
     // 加载歌单歌曲
-    const loaded = this.loadPlaylistSongs(playlistId);
+    const loaded = await this.loadPlaylistSongs(playlistId);
     if (!loaded) {
       mimusic.log.error('[PlaylistManager] Failed to load playlist songs: ' + playlistId);
       return false;
@@ -110,14 +110,14 @@ export class PlaylistManager {
     this.randomPlayed = new Set();
 
     // 开始播放当前歌曲
-    const ok = this.playCurrent();
+    const ok = await this.playCurrent();
     if (!ok) {
       mimusic.log.error('[PlaylistManager] Failed to play current song');
       return false;
     }
 
     // 持久化播放状态到设备配置
-    this.persistState();
+    await this.persistState();
 
     mimusic.log.info(`[PlaylistManager] Playlist started id=${playlistId} index=${this.currentIndex} mode=${this.playMode} total=${this.songs.length}`);
     return true;
@@ -126,14 +126,14 @@ export class PlaylistManager {
   /**
    * 停止播放
    */
-  stop(): void {
+  async stop(): Promise<void> {
     this.stopCheckTimer();
     this.state = 'stopped';
     this.playStartTimeMs = 0;
 
     // 调用设备暂停
     if (this.accountId && this.deviceId) {
-      this.minaService.pausePlay(this.accountId, this.deviceId);
+      await this.minaService.pausePlay(this.accountId, this.deviceId);
     }
 
     mimusic.log.info('[PlaylistManager] Playback stopped');
@@ -143,7 +143,7 @@ export class PlaylistManager {
    * 下一首
    * @returns 是否成功
    */
-  next(): boolean {
+  async next(): Promise<boolean> {
     if (this.songs.length === 0) {
       mimusic.log.warn('[PlaylistManager] No playlist loaded for next');
       return false;
@@ -152,14 +152,14 @@ export class PlaylistManager {
     const nextIdx = this.getNextIndex();
     if (nextIdx < 0) {
       mimusic.log.info('[PlaylistManager] No next song, stopping');
-      this.stop();
+      await this.stop();
       return false;
     }
 
     this.currentIndex = nextIdx;
-    const ok = this.playCurrent();
+    const ok = await this.playCurrent();
     if (ok) {
-      this.persistState();
+      await this.persistState();
     }
     return ok;
   }
@@ -168,7 +168,7 @@ export class PlaylistManager {
    * 上一首
    * @returns 是否成功
    */
-  previous(): boolean {
+  async previous(): Promise<boolean> {
     if (this.songs.length === 0) {
       mimusic.log.warn('[PlaylistManager] No playlist loaded for previous');
       return false;
@@ -181,9 +181,9 @@ export class PlaylistManager {
     }
 
     this.currentIndex = prevIdx;
-    const ok = this.playCurrent();
+    const ok = await this.playCurrent();
     if (ok) {
-      this.persistState();
+      await this.persistState();
     }
     return ok;
   }
@@ -191,7 +191,7 @@ export class PlaylistManager {
   /**
    * 设置播放模式
    */
-  setPlayMode(mode: PlayMode): void {
+  async setPlayMode(mode: PlayMode): Promise<void> {
     this.playMode = mode;
 
     // 切换到随机模式时重置已播放记录
@@ -201,7 +201,7 @@ export class PlaylistManager {
 
     // 持久化到设备配置
     try {
-      this.configManager.updateDevice(this.accountId, this.deviceId, {
+      await this.configManager.updateDevice(this.accountId, this.deviceId, {
         play_mode: mode,
       });
     } catch (e) {
@@ -299,16 +299,16 @@ export class PlaylistManager {
   /**
    * 加载歌单歌曲（通过宿主API桥接）
    */
-  private loadPlaylistSongs(playlistId: number): boolean {
+  private async loadPlaylistSongs(playlistId: number): Promise<boolean> {
     try {
       // 使用 mimusic.playlists.getSongs 桥接调用（与 Go WASM 版本的 hostFunctions.CallRouter 等价）
       // 这样不需要 hostBaseUrl 和 pluginToken，直接通过内部桥接访问数据库
-      const songs = mimusic.playlists.getSongs(playlistId, { limit: 100000 });
+      const songs = await mimusic.playlists.getSongs(playlistId, { limit: 100000 } as any);
       if (!songs || !Array.isArray(songs)) {
         mimusic.log.error('[PlaylistManager] Bridge returned invalid songs data for playlist: ' + playlistId);
         return false;
       }
-      this.songs = songs;
+      this.songs = songs as any;
       this.totalSongs = songs.length;
       return songs.length > 0;
     } catch (e) {
@@ -320,7 +320,7 @@ export class PlaylistManager {
   /**
    * 播放当前索引的歌曲
    */
-  private playCurrent(): boolean {
+  private async playCurrent(): Promise<boolean> {
     if (this.currentIndex < 0 || this.currentIndex >= this.songs.length) {
       mimusic.log.error('[PlaylistManager] Invalid current index: ' + this.currentIndex);
       return false;
@@ -336,7 +336,7 @@ export class PlaylistManager {
     }
 
     // 构造播放URL
-    const songURL = URLBuilder.buildSongURL(song);
+    const songURL = await URLBuilder.buildSongURL(song);
     if (!songURL) {
       mimusic.log.error('[PlaylistManager] Failed to build song URL: ' + song.title);
       return false;
@@ -348,7 +348,7 @@ export class PlaylistManager {
     this.stopCheckTimer();
 
     // 调用小爱音箱播放
-    const ok = this.minaService.playURL(this.accountId, this.deviceId, songURL);
+    const ok = await this.minaService.playURL(this.accountId, this.deviceId, songURL);
     if (!ok) {
       mimusic.log.error('[PlaylistManager] Failed to play URL on device');
       return false;
@@ -472,7 +472,9 @@ export class PlaylistManager {
     mimusic.log.info('[PlaylistManager] Timer registered delayMs=' + delayMs);
 
     this.checkTimer = setTimeout(() => {
-      this.onSongFinished();
+      this.onSongFinished().catch(e => {
+        mimusic.log.error('[PlaylistManager] onSongFinished error: ' + String(e));
+      });
     }, delayMs);
   }
 
@@ -489,7 +491,7 @@ export class PlaylistManager {
   /**
    * 歌曲播放结束回调
    */
-  private onSongFinished(): void {
+  private async onSongFinished(): Promise<void> {
     if (this.state !== 'playing') {
       mimusic.log.info('[PlaylistManager] Not playing, skip auto-next');
       return;
@@ -504,9 +506,9 @@ export class PlaylistManager {
     }
 
     this.currentIndex = nextIdx;
-    const ok = this.playCurrent();
+    const ok = await this.playCurrent();
     if (ok) {
-      this.persistState();
+      await this.persistState();
     } else {
       mimusic.log.error('[PlaylistManager] Auto-next failed, stopping');
       this.state = 'stopped';
@@ -517,9 +519,9 @@ export class PlaylistManager {
   /**
    * 持久化播放状态到设备配置
    */
-  private persistState(): void {
+  private async persistState(): Promise<void> {
     try {
-      this.configManager.updateDevice(this.accountId, this.deviceId, {
+      await this.configManager.updateDevice(this.accountId, this.deviceId, {
         playlist_id: this.playlistId,
         current_song_index: this.currentIndex,
         play_mode: this.playMode,
@@ -550,7 +552,7 @@ export class PlaylistManagerMap {
    * 获取或创建播放管理器
    * 若设备配置中存有 playlistId，则自动恢复播放列表（不自动开始播放）
    */
-  getOrCreate(accountId: string, deviceId: string): PlaylistManager {
+  async getOrCreate(accountId: string, deviceId: string): Promise<PlaylistManager> {
     const key = this.makeKey(accountId, deviceId);
     const existing = this.managers.get(key);
     if (existing) {
@@ -562,7 +564,7 @@ export class PlaylistManagerMap {
     this.managers.set(key, manager);
 
     // 尝试从配置中恢复播放列表状态（不自动播放）
-    this.restoreFromConfig(manager, accountId, deviceId);
+    await this.restoreFromConfig(manager, accountId, deviceId);
 
     return manager;
   }
@@ -613,9 +615,9 @@ export class PlaylistManagerMap {
   /**
    * 从配置中恢复播放列表（不自动播放）
    */
-  private restoreFromConfig(manager: PlaylistManager, accountId: string, deviceId: string): void {
+  private async restoreFromConfig(manager: PlaylistManager, accountId: string, deviceId: string): Promise<void> {
     try {
-      const devices = this.configManager.getDevices(accountId);
+      const devices = await this.configManager.getDevices(accountId);
       const devCfg = devices.find(d => d.device_id === deviceId);
       if (!devCfg || !devCfg.playlist_id || devCfg.playlist_id <= 0) {
         return;
@@ -624,9 +626,9 @@ export class PlaylistManagerMap {
       // 使用 mimusic.playlists.getSongs 桥接调用加载歌单歌曲
       let songs: Song[] = [];
       try {
-        const result = mimusic.playlists.getSongs(devCfg.playlist_id, { limit: 100000 });
+        const result = await mimusic.playlists.getSongs(devCfg.playlist_id, { limit: 100000 } as any);
         if (result && Array.isArray(result)) {
-          songs = result;
+          songs = result as any;
         }
       } catch (e) {
         mimusic.log.warn('[PlaylistManagerMap] Failed to load songs via bridge: ' + String(e));

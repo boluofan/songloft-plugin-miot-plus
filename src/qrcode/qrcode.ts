@@ -80,7 +80,7 @@ export class QRCodeLogin {
    * 1. 调用 serviceLogin 获取 _sign, qs, callback
    * 2. 请求 longPolling/loginUrl 获取二维码 URL 和轮询 URL
    */
-  getQRCode(): QRCodeInfo | null {
+  async getQRCode(): Promise<QRCodeInfo | null> {
     try {
       // Step 1: GET serviceLogin 获取登录签名参数
       const serviceLoginUrl = `${ACCOUNT_BASE_URL}/pass/serviceLogin?sid=${QR_LOGIN_SID}&_json=true`;
@@ -90,10 +90,10 @@ export class QRCodeLogin {
         'Cookie': `sdkVersion=3.8.6; deviceId=${this.deviceId}`,
       };
 
-      const { response: resp1 } = fetchWithRedirects(serviceLoginUrl, {
+      const { response: resp1 } = await fetchWithRedirects(serviceLoginUrl, {
         method: 'GET',
         headers,
-      }, this.cookieJar, 0) as any;
+      }, this.cookieJar, 0);
 
       const body1 = resp1.text();
       const jsonStr1 = stripJsonPrefix(body1);
@@ -138,10 +138,10 @@ export class QRCodeLogin {
         headers2['Cookie'] = cookieHeader;
       }
 
-      const { response: resp2 } = fetchWithRedirects(qrUrl, {
+      const { response: resp2 } = await fetchWithRedirects(qrUrl, {
         method: 'GET',
         headers: headers2,
-      }, this.cookieJar, 0) as any;
+      }, this.cookieJar, 0);
 
       const body2 = resp2.text();
       const jsonStr2 = stripJsonPrefix(body2);
@@ -193,7 +193,7 @@ export class QRCodeLogin {
    * 对 lpUrl 发起 GET 请求（服务端长轮询，约 30s 超时）
    * 返回当前状态和可能的 Token 信息
    */
-  poll(): PollResult {
+  async poll(): Promise<PollResult> {
     if (!this.pollUrl) {
       return { state: 'failed', message: 'no poll URL, call getQRCode() first' };
     }
@@ -219,10 +219,10 @@ export class QRCodeLogin {
 
       let response: any;
       try {
-        const result = fetchWithRedirects(this.pollUrl, {
+        const result = await fetchWithRedirects(this.pollUrl, {
           method: 'GET',
           headers,
-        }, this.cookieJar, 0) as any;
+        }, this.cookieJar, 0);
         response = result.response;
       } catch (e: any) {
         // 超时处理：fetch 阻塞超时后抛出异常
@@ -282,7 +282,7 @@ export class QRCodeLogin {
       console.log(`[qrcode] poll: QR code login successful, userId=${userId}`);
 
       // 使用 MinaAuth 交换目标服务的 serviceToken
-      const tokenInfo = this.exchangeToken(passToken, userId, cUserId);
+      const tokenInfo = await this.exchangeToken(passToken, userId, cUserId);
       if (!tokenInfo) {
         this.updateState('failed');
         return { state: 'failed', message: 'failed to exchange serviceToken' };
@@ -308,7 +308,7 @@ export class QRCodeLogin {
    * 使用 setInterval 驱动轮询循环
    * 每次 poll() 本身会阻塞到服务端超时（约 30s），所以间隔设短即可
    */
-  startPolling(): void {
+  async startPolling(): Promise<void> {
     if (this.pollTimer !== null) {
       return; // 已在轮询中
     }
@@ -319,7 +319,7 @@ export class QRCodeLogin {
     }
 
     // 立即执行一次轮询
-    const firstResult = this.poll();
+    const firstResult = await this.poll();
     if (this.isTerminalState(firstResult.state)) {
       if (this.onStateChange) {
         this.onStateChange(firstResult.state, firstResult);
@@ -328,8 +328,8 @@ export class QRCodeLogin {
     }
 
     // 设置定时器继续轮询
-    this.pollTimer = setInterval(() => {
-      const result = this.poll();
+    this.pollTimer = setInterval(async () => {
+      const result = await this.poll();
 
       if (this.onStateChange) {
         this.onStateChange(result.state, result);
@@ -393,7 +393,7 @@ export class QRCodeLogin {
    * 使用 passToken 交换目标服务的 serviceToken
    * 通过 MinaAuth 的 refreshByPassToken 方法实现
    */
-  private exchangeToken(passToken: string, userId: string, cUserId: string): XiaomiTokenInfo | null {
+  private async exchangeToken(passToken: string, userId: string, cUserId: string): Promise<XiaomiTokenInfo | null> {
     try {
       console.log(`[qrcode] exchangeToken: exchanging passToken for ${this.sid} serviceToken`);
 
@@ -411,7 +411,7 @@ export class QRCodeLogin {
       }
 
       // 使用 refreshByPassToken 交换 serviceToken
-      const result = auth.refreshByPassToken(passToken, userId, this.sid);
+      const result = await auth.refreshByPassToken(passToken, userId, this.sid);
 
       if (result.state !== 'success' || !result.tokenInfo) {
         console.log(`[qrcode] exchangeToken: failed: ${result.error || 'unknown error'}`);

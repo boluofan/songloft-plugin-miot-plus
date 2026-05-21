@@ -54,7 +54,7 @@ export class MinaService {
    * - 返回合并后的设备信息（含 managed/volume/playMode 等本地设置）
    * - 如果API调用失败，返回本地缓存的设备列表
    */
-  getDevices(accountId: string): DeviceInfo[] {
+  async getDevices(accountId: string): Promise<DeviceInfo[]> {
     const client = this.getClient(accountId);
 
     // 如果客户端不可用，回退到本地缓存
@@ -65,7 +65,7 @@ export class MinaService {
 
     let apiDevices: MinaDevice[];
     try {
-      apiDevices = client.getDeviceList();
+      apiDevices = await client.getDeviceList();
     } catch (e) {
       mimusic.log.error('[MinaService] Failed to get device list from API: ' + String(e));
       return this.buildDeviceInfoFromLocal(accountId);
@@ -83,7 +83,7 @@ export class MinaService {
 
     // 合并到本地配置
     try {
-      this.accountManager.updateDeviceList(accountId, apiDevices);
+      await this.accountManager.updateDeviceList(accountId, apiDevices);
     } catch (e) {
       mimusic.log.error('[MinaService] Failed to update device list in config: ' + String(e));
     }
@@ -98,7 +98,7 @@ export class MinaService {
    * 播放指定URL
    * 先暂停当前播放（防止声音叠加），再根据设备型号选择播放接口
    */
-  playURL(accountId: string, deviceId: string, url: string): boolean {
+  async playURL(accountId: string, deviceId: string, url: string): Promise<boolean> {
     const client = this.getClient(accountId);
     if (!client) {
       mimusic.log.warn('[MinaService] playURL: no client for account: ' + accountId);
@@ -107,15 +107,15 @@ export class MinaService {
 
     try {
       // 播放前先暂停当前播放，防止小爱音箱出现两个声音叠加
-      client.playerPause(deviceId);
+      await client.playerPause(deviceId);
     } catch (e) {
       mimusic.log.warn('[MinaService] Pre-pause before play failed, continuing: ' + String(e));
     }
 
     try {
       // 获取设备硬件型号用于选择播放接口
-      const hardware = this.getDeviceHardware(client, deviceId);
-      return client.playByUrl(deviceId, url, hardware);
+      const hardware = await this.getDeviceHardware(client, deviceId);
+      return await client.playByUrl(deviceId, url, hardware);
     } catch (e) {
       mimusic.log.error('[MinaService] playURL failed: ' + String(e));
       return false;
@@ -125,7 +125,7 @@ export class MinaService {
   /**
    * 停止播放
    */
-  stopPlay(accountId: string, deviceId: string): boolean {
+  async stopPlay(accountId: string, deviceId: string): Promise<boolean> {
     const client = this.getClient(accountId);
     if (!client) {
       mimusic.log.warn('[MinaService] stopPlay: no client for account: ' + accountId);
@@ -133,7 +133,7 @@ export class MinaService {
     }
 
     try {
-      return client.playerStop(deviceId);
+      return await client.playerStop(deviceId);
     } catch (e) {
       mimusic.log.error('[MinaService] stopPlay failed: ' + String(e));
       return false;
@@ -143,7 +143,7 @@ export class MinaService {
   /**
    * 暂停播放
    */
-  pausePlay(accountId: string, deviceId: string): boolean {
+  async pausePlay(accountId: string, deviceId: string): Promise<boolean> {
     const client = this.getClient(accountId);
     if (!client) {
       mimusic.log.warn('[MinaService] pausePlay: no client for account: ' + accountId);
@@ -151,7 +151,7 @@ export class MinaService {
     }
 
     try {
-      return client.playerPause(deviceId);
+      return await client.playerPause(deviceId);
     } catch (e) {
       mimusic.log.error('[MinaService] pausePlay failed: ' + String(e));
       return false;
@@ -161,7 +161,7 @@ export class MinaService {
   /**
    * 恢复播放
    */
-  resumePlay(accountId: string, deviceId: string): boolean {
+  async resumePlay(accountId: string, deviceId: string): Promise<boolean> {
     const client = this.getClient(accountId);
     if (!client) {
       mimusic.log.warn('[MinaService] resumePlay: no client for account: ' + accountId);
@@ -169,7 +169,7 @@ export class MinaService {
     }
 
     try {
-      return client.playerResume(deviceId);
+      return await client.playerResume(deviceId);
     } catch (e) {
       mimusic.log.error('[MinaService] resumePlay failed: ' + String(e));
       return false;
@@ -182,7 +182,7 @@ export class MinaService {
    * 设置音量 (0-100)
    * 成功后更新本地配置 deviceConfig.volume
    */
-  setVolume(accountId: string, deviceId: string, volume: number): boolean {
+  async setVolume(accountId: string, deviceId: string, volume: number): Promise<boolean> {
     const client = this.getClient(accountId);
     if (!client) {
       mimusic.log.warn('[MinaService] setVolume: no client for account: ' + accountId);
@@ -190,11 +190,11 @@ export class MinaService {
     }
 
     try {
-      const ok = client.setVolume(deviceId, volume);
+      const ok = await client.setVolume(deviceId, volume);
       if (ok) {
         // 成功后更新本地配置
         try {
-          this.accountManager.updateDeviceConfig(accountId, deviceId, { volume });
+          await this.accountManager.updateDeviceConfig(accountId, deviceId, { volume });
         } catch (e) {
           mimusic.log.warn('[MinaService] Failed to save volume to config: ' + String(e));
         }
@@ -210,7 +210,7 @@ export class MinaService {
    * 获取设备音量
    * @returns 音量 (0-100)，失败返回 -1
    */
-  getVolume(accountId: string, deviceId: string): number {
+  async getVolume(accountId: string, deviceId: string): Promise<number> {
     const client = this.getClient(accountId);
     if (!client) {
       mimusic.log.warn('[MinaService] getVolume: no client for account: ' + accountId);
@@ -218,7 +218,7 @@ export class MinaService {
     }
 
     try {
-      return client.getVolume(deviceId);
+      return await client.getVolume(deviceId);
     } catch (e) {
       mimusic.log.error('[MinaService] getVolume failed: ' + String(e));
       return -1;
@@ -230,7 +230,7 @@ export class MinaService {
   /**
    * TTS语音播报
    */
-  textToSpeech(accountId: string, deviceId: string, text: string): boolean {
+  async textToSpeech(accountId: string, deviceId: string, text: string): Promise<boolean> {
     const client = this.getClient(accountId);
     if (!client) {
       mimusic.log.warn('[MinaService] textToSpeech: no client for account: ' + accountId);
@@ -238,7 +238,7 @@ export class MinaService {
     }
 
     try {
-      return client.textToSpeech(deviceId, text);
+      return await client.textToSpeech(deviceId, text);
     } catch (e) {
       mimusic.log.error('[MinaService] textToSpeech failed: ' + String(e));
       return false;
@@ -251,14 +251,14 @@ export class MinaService {
    * 更新设备管理状态（是否被本插件管理）
    * 仅更新本地配置，不需要调用远程API
    */
-  updateManagedStatus(accountId: string, deviceId: string, managed: boolean): boolean {
+  async updateManagedStatus(accountId: string, deviceId: string, managed: boolean): Promise<boolean> {
     if (!accountId || !deviceId) {
       mimusic.log.warn('[MinaService] updateManagedStatus: accountId and deviceId cannot be empty');
       return false;
     }
 
     try {
-      this.accountManager.updateDeviceConfig(accountId, deviceId, { managed });
+      await this.accountManager.updateDeviceConfig(accountId, deviceId, { managed });
       return true;
     } catch (e) {
       mimusic.log.error('[MinaService] updateManagedStatus failed: ' + String(e));
@@ -270,15 +270,15 @@ export class MinaService {
    * 记录最后选中的设备
    * 更新 accountManager.setLastSelectedDevice 和 deviceConfig.last_selected_at
    */
-  updateLastSelection(accountId: string, deviceId: string): boolean {
+  async updateLastSelection(accountId: string, deviceId: string): Promise<boolean> {
     if (!accountId || !deviceId) {
       mimusic.log.warn('[MinaService] updateLastSelection: accountId and deviceId cannot be empty');
       return false;
     }
 
     try {
-      this.accountManager.setLastSelectedDevice(accountId, deviceId);
-      this.accountManager.updateDeviceConfig(accountId, deviceId, {
+      await this.accountManager.setLastSelectedDevice(accountId, deviceId);
+      await this.accountManager.updateDeviceConfig(accountId, deviceId, {
         last_selected_at: new Date().toISOString(),
       });
       return true;
@@ -292,7 +292,7 @@ export class MinaService {
    * 获取设备播放状态
    * @returns 播放状态对象，失败返回 null
    */
-  getPlayerStatus(accountId: string, deviceId: string): any {
+  async getPlayerStatus(accountId: string, deviceId: string): Promise<any> {
     const client = this.getClient(accountId);
     if (!client) {
       mimusic.log.warn('[MinaService] getPlayerStatus: no client for account: ' + accountId);
@@ -300,7 +300,7 @@ export class MinaService {
     }
 
     try {
-      return client.getPlayerStatus(deviceId);
+      return await client.getPlayerStatus(deviceId);
     } catch (e) {
       mimusic.log.error('[MinaService] getPlayerStatus failed: ' + String(e));
       return null;
@@ -324,13 +324,13 @@ export class MinaService {
   /**
    * 获取设备硬件型号（先查缓存，缓存不存在则刷新设备列表）
    */
-  private getDeviceHardware(client: MinaHTTPClient, deviceId: string): string {
+  private async getDeviceHardware(client: MinaHTTPClient, deviceId: string): Promise<string> {
     const cached = this.deviceModelCache.get(deviceId);
     if (cached) return cached;
 
     // 缓存中没有，刷新设备列表
     try {
-      const devices = client.getDeviceList();
+      const devices = await client.getDeviceList();
       for (const dev of devices) {
         this.deviceModelCache.set(dev.deviceID, dev.hardware);
         if (dev.deviceID === deviceId) {
@@ -347,8 +347,8 @@ export class MinaService {
   /**
    * 从本地配置构建 DeviceInfo 列表（不含在线状态）
    */
-  private buildDeviceInfoFromLocal(accountId: string): DeviceInfo[] {
-    const devices = this.configManager.getDevices(accountId);
+  private async buildDeviceInfoFromLocal(accountId: string): Promise<DeviceInfo[]> {
+    const devices = await this.configManager.getDevices(accountId);
     return devices.map(dev => ({
       deviceID: dev.device_id,
       name: dev.device_name,
@@ -369,9 +369,9 @@ export class MinaService {
    * 合并API设备数据和本地配置构建 DeviceInfo 列表
    * presence 字段用于判断设备是否在线
    */
-  private buildDeviceInfoMerged(accountId: string, apiDevices: MinaDevice[]): DeviceInfo[] {
+  private async buildDeviceInfoMerged(accountId: string, apiDevices: MinaDevice[]): Promise<DeviceInfo[]> {
     // 从已合并的本地配置中读取（updateDeviceList 已保存）
-    const localDevices = this.configManager.getDevices(accountId);
+    const localDevices = await this.configManager.getDevices(accountId);
     const localMap = new Map<string, DeviceConfig>();
     for (const dev of localDevices) {
       localMap.set(dev.device_id, dev);

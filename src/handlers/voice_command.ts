@@ -29,10 +29,10 @@ export function registerVoiceCommandHandlers(
 ): void {
 
   // GET /voice-commands - 获取语音口令配置
-  router.get('/voice-commands', (req: HTTPRequest) => {
+  router.get('/voice-commands', (async (req: HTTPRequest) => {
     try {
-      const commands = configManager.getVoiceCommands();
-      const config = configManager.getConfig();
+      const commands = await configManager.getVoiceCommands();
+      const config = await configManager.getConfig();
       return jsonResponse({
         success: true,
         data: { enabled: config.voice_command_enabled, commands },
@@ -40,10 +40,10 @@ export function registerVoiceCommandHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 
   // POST /voice-commands - 设置语音口令配置
-  router.post('/voice-commands', (req: HTTPRequest) => {
+  router.post('/voice-commands', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
       const { commands } = body;
@@ -52,10 +52,10 @@ export function registerVoiceCommandHandlers(
         return jsonResponse({ success: false, error: 'commands array is required' });
       }
 
-      configManager.saveVoiceCommands(commands);
+      await configManager.saveVoiceCommands(commands);
       return jsonResponse({ success: true, data: { message: 'voice commands saved', commands } });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
     }
-  });
+  }) as any);
 }

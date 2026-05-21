@@ -45,11 +45,15 @@ export class Scheduler {
 
     // 启动 30s 周期 tick
     this.tickTimer = setInterval(() => {
-      this.tick();
+      this.tick().catch(e => {
+        mimusic.log.error('[Scheduler] tick error: ' + String(e));
+      });
     }, TICK_INTERVAL_MS);
 
     // 立即执行一次
-    this.tick();
+    this.tick().catch(e => {
+      mimusic.log.error('[Scheduler] initial tick error: ' + String(e));
+    });
 
     mimusic.log.info('[Scheduler] 定时任务调度器已启动');
   }
@@ -93,7 +97,7 @@ export class Scheduler {
   /**
    * 单次 tick：检查当前时间是否有任务需要执行
    */
-  private tick(): void {
+  private async tick(): Promise<void> {
     if (!this.enabled) {
       return;
     }
@@ -113,7 +117,7 @@ export class Scheduler {
     const monthday = now.getDate();        // 1-31
 
     // 获取所有已启用的定时任务
-    const tasks = this.configManager.getScheduledTasks();
+    const tasks = await this.configManager.getScheduledTasks();
     for (const task of tasks) {
       if (!task.enabled) {
         continue;
@@ -130,9 +134,9 @@ export class Scheduler {
       );
 
       // 执行任务
-      const logs = this.executor.execute(task);
+      const logs = await this.executor.execute(task);
       for (const log of logs) {
-        this.appendLog(log);
+        await this.appendLog(log);
       }
     }
   }
@@ -175,13 +179,13 @@ export class Scheduler {
   /**
    * 追加执行日志到环形缓冲区
    */
-  private appendLog(log: TaskLog): void {
+  private async appendLog(log: TaskLog): Promise<void> {
     this.logs.push(log);
     if (this.logs.length > MAX_LOGS) {
       this.logs = this.logs.slice(this.logs.length - MAX_LOGS);
     }
     // 同时持久化到 configManager
-    this.configManager.addScheduleLog(log);
+    await this.configManager.addScheduleLog(log);
   }
 
   /**

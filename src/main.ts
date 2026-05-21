@@ -37,13 +37,13 @@ let conversationMonitor: ConversationMonitor;
 let voiceEngine: VoiceEngine;
 let indexingManager: IndexingManager;
 
-function onInit(): void {
+async function onInit(): Promise<void> {
   mimusic.log.info('小米音箱插件初始化...');
 
   // 初始化管理器
   configManager = new ConfigManager();
   accountManager = new AccountManager(configManager);
-  accountManager.init();
+  await accountManager.init();
 
   indexingManager = new IndexingManager();
   authService = new AuthService(configManager, accountManager);
@@ -51,7 +51,7 @@ function onInit(): void {
   playlistManagerMap = new PlaylistManagerMap(minaService, configManager);
 
   // 从配置中读取服务器地址并设置宿主 API 基础 URL
-  const pluginConfig = configManager.getConfig();
+  const pluginConfig = await configManager.getConfig();
   if (pluginConfig.server_host) {
     setHostBaseUrl(pluginConfig.server_host);
     mimusic.log.info('宿主 API 基础 URL 已设置: ' + pluginConfig.server_host);
@@ -64,10 +64,10 @@ function onInit(): void {
   conversationMonitor = new ConversationMonitor(accountManager, configManager);
 
   // 如果配置中没有语音口令配置，写入默认配置
-  const existingCommands = configManager.getVoiceCommands();
+  const existingCommands = await configManager.getVoiceCommands();
   if (!existingCommands || existingCommands.length === 0) {
     const defaultCommands = getDefaultVoiceCommands();
-    configManager.saveVoiceCommands(defaultCommands);
+    await configManager.saveVoiceCommands(defaultCommands);
     mimusic.log.info(`[VoiceCmd] Initialized ${defaultCommands.length} default voice commands`);
   }
 
@@ -82,16 +82,20 @@ function onInit(): void {
   registerVoiceCommandHandlers(router, configManager);
   registerIndexingHandlers(router, indexingManager);
 
-  // 自动登录 + 启动后台服务
-  authService.autoLoginAll();
+  // 自动登录 + 启动后台服务（异步，不阻塞插件初始化）
+  authService.autoLoginAll().catch(e => {
+    mimusic.log.error('autoLoginAll failed: ' + String(e));
+  });
   // 异步刷新索引，不阻塞插件初始化
   setTimeout(() => {
-    indexingManager.refresh();
+    indexingManager.refresh().catch(e => {
+      mimusic.log.error('indexingManager.refresh failed: ' + String(e));
+    });
   }, 100);
 
   // 注册 VoiceEngine 回调（独立于启停生命周期）
   conversationMonitor.registerCallback('voice_engine', (msg) => {
-    voiceEngine.handleMessage(msg);
+    return voiceEngine.handleMessage(msg);
   });
 
   // 根据配置启动后台服务
@@ -108,7 +112,7 @@ function onInit(): void {
   mimusic.log.info('小米音箱插件初始化完成');
 }
 
-function onDeinit(): void {
+async function onDeinit(): Promise<void> {
   mimusic.log.info('小米音箱插件停止...');
   scheduler?.stop();
   conversationMonitor?.stop();
@@ -117,11 +121,11 @@ function onDeinit(): void {
   mimusic.log.info('小米音箱插件已停止');
 }
 
-function onHTTPRequest(req: HTTPRequest): HTTPResponse {
+async function onHTTPRequest(req: HTTPRequest): Promise<HTTPResponse> {
   return router.handle(req);
 }
 
 // 暴露为全局（QuickJS 需要显式声明）
-globalThis.onInit = onInit;
-globalThis.onDeinit = onDeinit;
-globalThis.onHTTPRequest = onHTTPRequest;
+globalThis.onInit = onInit as any;
+globalThis.onDeinit = onDeinit as any;
+globalThis.onHTTPRequest = onHTTPRequest as any;

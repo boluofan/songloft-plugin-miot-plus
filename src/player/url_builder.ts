@@ -101,14 +101,14 @@ export class URLBuilder {
    * - 远程歌曲(type=remote)且URL为相对路径：{serverHost}{url}{?|&}access_token={token}
    * - 远程歌曲(type=remote)且URL为绝对路径：直接返回URL
    */
-  static buildSongURL(song: {
+  static async buildSongURL(song: {
     id?: number;
     file_path?: string;
     url?: string;
     type?: string;
-  }): string {
+  }): Promise<string> {
     const serverHost = getHostBaseUrl();
-    const accessToken = mimusic.plugin.getToken();
+    const accessToken = await mimusic.plugin.getToken();
 
     if (song.type === 'local' && song.file_path) {
       // 本地歌曲：使用 Base62 编码路径
@@ -132,13 +132,13 @@ export class URLBuilder {
    * 构造封面URL
    * - 封面路径不为空时：{serverHost}/cover/{base62EncodedPath}{ext}?access_token={token}
    */
-  static buildCoverURL(coverPath: string): string {
+  static async buildCoverURL(coverPath: string): Promise<string> {
     if (!coverPath) {
       return '';
     }
 
     const serverHost = getHostBaseUrl();
-    const accessToken = mimusic.plugin.getToken();
+    const accessToken = await mimusic.plugin.getToken();
     const pathWithoutExt = getPathWithoutExtension(coverPath);
     const ext = getExtension(coverPath);
     const encodedPath = encodeBase62(pathWithoutExt);

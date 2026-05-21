@@ -32,7 +32,7 @@ export class AccountManager {
    * - 2参数: createAccount(account, authType) — Handler 使用，account 同时作为 id
    * @returns 新创建的 AccountConfig
    */
-  createAccount(idOrAccount: string, accountOrAuthType: string, authType?: string): AccountConfig {
+  async createAccount(idOrAccount: string, accountOrAuthType: string, authType?: string): Promise<AccountConfig> {
     let id: string;
     let account: string;
     let finalAuthType: string;
@@ -64,7 +64,7 @@ export class AccountManager {
       created_at: now,
       updated_at: now,
     };
-    this.configManager.addAccount(newAccount);
+    await this.configManager.addAccount(newAccount);
     return newAccount;
   }
 
@@ -72,18 +72,18 @@ export class AccountManager {
    * 删除账号
    * 同时清除运行时的MinaClient实例
    */
-  deleteAccount(accountId: string): void {
+  async deleteAccount(accountId: string): Promise<void> {
     this.minaClients.delete(accountId);
-    this.configManager.removeAccount(accountId);
+    await this.configManager.removeAccount(accountId);
   }
 
   /** 获取单个账号配置 */
-  getAccount(accountId: string): AccountConfig | null {
+  async getAccount(accountId: string): Promise<AccountConfig | null> {
     return this.configManager.getAccount(accountId);
   }
 
   /** 获取所有账号配置 */
-  getAccounts(): AccountConfig[] {
+  async getAccounts(): Promise<AccountConfig[]> {
     return this.configManager.getAccounts();
   }
 
@@ -93,8 +93,8 @@ export class AccountManager {
    * 标记账号为已登录
    * 保存Token信息到持久化存储
    */
-  setAccountLoggedIn(accountId: string, tokenInfo: XiaomiTokenInfo): void {
-    this.configManager.updateAccount(accountId, {
+  async setAccountLoggedIn(accountId: string, tokenInfo: XiaomiTokenInfo): Promise<void> {
+    await this.configManager.updateAccount(accountId, {
       user_id: tokenInfo.user_id,
       services: tokenInfo.services,
       auth_type: 'token',
@@ -105,9 +105,9 @@ export class AccountManager {
    * 标记账号为已登出
    * 清除Token信息和运行时客户端
    */
-  setAccountLoggedOut(accountId: string): void {
+  async setAccountLoggedOut(accountId: string): Promise<void> {
     this.minaClients.delete(accountId);
-    this.configManager.updateAccount(accountId, {
+    await this.configManager.updateAccount(accountId, {
       services: {},
       pass_token: '',
     });
@@ -117,8 +117,8 @@ export class AccountManager {
    * 检查账号是否已登录
    * 判断依据：至少有一个service token存在
    */
-  isAccountLoggedIn(accountId: string): boolean {
-    const account = this.configManager.getAccount(accountId);
+  async isAccountLoggedIn(accountId: string): Promise<boolean> {
+    const account = await this.configManager.getAccount(accountId);
     if (!account) return false;
     return Object.keys(account.services).length > 0;
   }
@@ -147,8 +147,8 @@ export class AccountManager {
    * 合并API返回的设备信息和本地已有配置
    * 保留本地设置（managed/volume/playMode等），更新设备基本信息
    */
-  updateDeviceList(accountId: string, devices: MinaDevice[]): void {
-    const account = this.configManager.getAccount(accountId);
+  async updateDeviceList(accountId: string, devices: MinaDevice[]): Promise<void> {
+    const account = await this.configManager.getAccount(accountId);
     if (!account) {
       throw new Error(`Account not found: ${accountId}`);
     }
@@ -178,31 +178,31 @@ export class AccountManager {
       };
     });
 
-    this.configManager.updateAccount(accountId, { devices: mergedDevices });
+    await this.configManager.updateAccount(accountId, { devices: mergedDevices });
   }
 
   /**
    * 获取受管理的设备列表
    * 过滤 managed === true 的设备
    */
-  getManagedDevices(accountId: string): DeviceConfig[] {
-    const devices = this.configManager.getDevices(accountId);
+  async getManagedDevices(accountId: string): Promise<DeviceConfig[]> {
+    const devices = await this.configManager.getDevices(accountId);
     return devices.filter(d => d.managed);
   }
 
   /** 更新特定设备的配置 */
-  updateDeviceConfig(accountId: string, deviceId: string, updates: Partial<DeviceConfig>): void {
-    this.configManager.updateDevice(accountId, deviceId, updates);
+  async updateDeviceConfig(accountId: string, deviceId: string, updates: Partial<DeviceConfig>): Promise<void> {
+    await this.configManager.updateDevice(accountId, deviceId, updates);
   }
 
   /** 设置最后选中的设备 */
-  setLastSelectedDevice(accountId: string, deviceId: string): void {
-    this.configManager.setLastSelectedDevice(accountId, deviceId);
+  async setLastSelectedDevice(accountId: string, deviceId: string): Promise<void> {
+    await this.configManager.setLastSelectedDevice(accountId, deviceId);
   }
 
   /** 获取最后选中的设备ID */
-  getLastSelectedDevice(accountId: string): string | null {
-    const account = this.configManager.getAccount(accountId);
+  async getLastSelectedDevice(accountId: string): Promise<string | null> {
+    const account = await this.configManager.getAccount(accountId);
     if (!account) return null;
     return account.last_selected_device_id || null;
   }
@@ -214,9 +214,9 @@ export class AccountManager {
    * 加载所有已保存的账号配置，但不自动重建MinaHTTPClient
    * MinaHTTPClient需要后续认证模块根据Token有效性来决定是否重建
    */
-  init(): void {
+  async init(): Promise<void> {
     // 从storage加载账号列表，确认数据可读
-    const accounts = this.configManager.getAccounts();
+    const accounts = await this.configManager.getAccounts();
     // 清除可能残留的运行时客户端引用
     this.minaClients.clear();
 

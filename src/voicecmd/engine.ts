@@ -99,7 +99,7 @@ export class VoiceEngine {
    * 处理新对话消息（由 ConversationMonitor 回调触发）
    * @param msg - 对话消息
    */
-  handleMessage(msg: ConversationMessage): void {
+  async handleMessage(msg: ConversationMessage): Promise<void> {
     if (!this.enabled) {
       return;
     }
@@ -111,7 +111,7 @@ export class VoiceEngine {
     }
 
     // 匹配口令
-    const result = this.matchCommand(query);
+    const result = await this.matchCommand(query);
     if (!result) {
       return;
     }
@@ -119,14 +119,14 @@ export class VoiceEngine {
     mimusic.log.info(`[VoiceEngine] Command matched type=${result.command.type} keyword="${result.keyword}" argument="${result.argument}" device=${msg.device_id}`);
 
     // 找到设备对应的 accountId
-    const accountId = this.findAccountForDevice(msg.device_id);
+    const accountId = await this.findAccountForDevice(msg.device_id);
     if (!accountId) {
       mimusic.log.warn(`[VoiceEngine] No account found for device: ${msg.device_id}`);
       return;
     }
 
     // 执行口令
-    this.executeCommand(result, accountId, msg.device_id);
+    await this.executeCommand(result, accountId, msg.device_id);
   }
 
   /**
@@ -149,8 +149,8 @@ export class VoiceEngine {
    * @param query - 用户说的话
    * @returns 匹配结果，null 表示未匹配
    */
-  private matchCommand(query: string): MatchResult | null {
-    const commands = this.configManager.getVoiceCommands();
+  private async matchCommand(query: string): Promise<MatchResult | null> {
+    const commands = await this.configManager.getVoiceCommands();
     if (commands.length === 0) {
       return null;
     }
@@ -188,28 +188,28 @@ export class VoiceEngine {
   /**
    * 执行匹配到的口令
    */
-  private executeCommand(result: MatchResult, accountId: string, deviceId: string): void {
+  private async executeCommand(result: MatchResult, accountId: string, deviceId: string): Promise<void> {
     switch (result.command.type) {
       case 'play_playlist':
-        this.executePlayPlaylist(result.argument, accountId, deviceId);
+        await this.executePlayPlaylist(result.argument, accountId, deviceId);
         break;
       case 'play_song':
-        this.executePlaySong(result.argument, accountId, deviceId);
+        await this.executePlaySong(result.argument, accountId, deviceId);
         break;
       case 'set_play_mode':
-        this.executeSetPlayMode(accountId, deviceId, result.command.param || result.argument);
+        await this.executeSetPlayMode(accountId, deviceId, result.command.param || result.argument);
         break;
       case 'set_volume':
-        this.executeSetVolume(accountId, deviceId, result.command.param || 'absolute', result.argument);
+        await this.executeSetVolume(accountId, deviceId, result.command.param || 'absolute', result.argument);
         break;
       case 'next':
-        this.executeNext(accountId, deviceId);
+        await this.executeNext(accountId, deviceId);
         break;
       case 'previous':
-        this.executePrevious(accountId, deviceId);
+        await this.executePrevious(accountId, deviceId);
         break;
       case 'stop':
-        this.executeStop(accountId, deviceId);
+        await this.executeStop(accountId, deviceId);
         break;
       default:
         mimusic.log.warn(`[VoiceEngine] Unknown command type: ${result.command.type}`);
@@ -220,14 +220,14 @@ export class VoiceEngine {
    * 执行播放歌单
    * 通过 IndexingManager 模糊匹配歌单名，然后调用 PlaylistManager 播放
    */
-  private executePlayPlaylist(playlistName: string, accountId: string, deviceId: string): void {
-    const pm = this.playlistManagerMap.getOrCreate(accountId, deviceId);
+  private async executePlayPlaylist(playlistName: string, accountId: string, deviceId: string): Promise<void> {
+    const pm = await this.playlistManagerMap.getOrCreate(accountId, deviceId);
 
     // 空参数处理：继续上次播放或使用默认歌单
     if (!playlistName) {
       if (pm.hasPlaylist()) {
         mimusic.log.info('[VoiceEngine] Play playlist: resume last playback');
-        pm.next(); // 触发播放
+        await pm.next(); // 触发播放
         return;
       }
 
@@ -254,7 +254,7 @@ export class VoiceEngine {
     let startIndex = 0;
     let playMode: PlayMode = 'order';
 
-    const devices = this.configManager.getDevices(accountId);
+    const devices = await this.configManager.getDevices(accountId);
     const devCfg = devices.find(d => d.device_id === deviceId);
     if (devCfg) {
       if (devCfg.playlist_id === matchedPlaylist.id) {
@@ -267,7 +267,7 @@ export class VoiceEngine {
     }
 
     // 播放歌单
-    const ok = pm.play(matchedPlaylist.id, startIndex, playMode);
+    const ok = await pm.play(matchedPlaylist.id, startIndex, playMode);
     if (ok) {
       mimusic.log.info(`[VoiceEngine] Play playlist success: ${matchedPlaylist.name} index=${startIndex} mode=${playMode}`);
     } else {
@@ -280,14 +280,14 @@ export class VoiceEngine {
    * 通过 IndexingManager 模糊匹配歌曲名，获取所在歌单及索引，然后调用 PlaylistManager 播放
    * 翻译自 Go 版本: voicecmd/engine.go executePlaySong
    */
-  private executePlaySong(songName: string, accountId: string, deviceId: string): void {
-    const pm = this.playlistManagerMap.getOrCreate(accountId, deviceId);
+  private async executePlaySong(songName: string, accountId: string, deviceId: string): Promise<void> {
+    const pm = await this.playlistManagerMap.getOrCreate(accountId, deviceId);
 
     // 空参数处理：继续上次播放
     if (!songName) {
       if (pm.hasPlaylist()) {
         mimusic.log.info('[VoiceEngine] Play song: resume last playback');
-        pm.next();
+        await pm.next();
         return;
       }
       mimusic.log.warn('[VoiceEngine] No song name specified and no active playlist');
@@ -301,7 +301,7 @@ export class VoiceEngine {
     }
 
     // 从索引中模糊匹配歌曲，获取歌单ID和歌曲索引
-    const loc = this.indexingManager.findSongByName(songName);
+    const loc = await this.indexingManager.findSongByName(songName);
     if (!loc) {
       mimusic.log.warn(`[VoiceEngine] Song not found: ${songName}`);
       return;
@@ -311,14 +311,14 @@ export class VoiceEngine {
 
     // 获取设备配置中的播放模式
     let playMode: PlayMode = 'order';
-    const devices = this.configManager.getDevices(accountId);
+    const devices = await this.configManager.getDevices(accountId);
     const devCfg = devices.find(d => d.device_id === deviceId);
     if (devCfg && devCfg.play_mode) {
       playMode = devCfg.play_mode as PlayMode;
     }
 
     // 播放歌单，从匹配到的歌曲索引开始
-    const ok = pm.play(loc.playlistId, loc.songIndex, playMode);
+    const ok = await pm.play(loc.playlistId, loc.songIndex, playMode);
     if (ok) {
       mimusic.log.info(`[VoiceEngine] Play song success: ${loc.songTitle} playlist="${loc.playlistName}" index=${loc.songIndex} mode=${playMode}`);
     } else {
@@ -330,7 +330,7 @@ export class VoiceEngine {
    * 执行设置播放模式
    * @param modeParam - 播放模式参数（来自 command.param 或 argument）
    */
-  private executeSetPlayMode(accountId: string, deviceId: string, modeParam: string): void {
+  private async executeSetPlayMode(accountId: string, deviceId: string, modeParam: string): Promise<void> {
     if (!modeParam) {
       mimusic.log.warn('[VoiceEngine] Set play mode: missing mode param');
       return;
@@ -360,11 +360,11 @@ export class VoiceEngine {
 
     const pm = this.playlistManagerMap.get(accountId, deviceId);
     if (pm) {
-      pm.setPlayMode(playMode);
+      await pm.setPlayMode(playMode);
     } else {
       // 没有活跃的播放管理器，仅更新配置
       try {
-        this.configManager.updateDevice(accountId, deviceId, { play_mode: playMode });
+        await this.configManager.updateDevice(accountId, deviceId, { play_mode: playMode });
       } catch (e) {
         mimusic.log.error(`[VoiceEngine] Failed to update play mode config: ${String(e)}`);
       }
@@ -378,12 +378,12 @@ export class VoiceEngine {
    * @param param - 音量方向："absolute"|"up"|"down"
    * @param argument - 口令关键词后的文本（用于提取数字）
    */
-  private executeSetVolume(accountId: string, deviceId: string, param: string, argument: string): void {
+  private async executeSetVolume(accountId: string, deviceId: string, param: string, argument: string): Promise<void> {
     // 获取当前音量（从设备配置中读取）
     let currentVolume = 50; // 默认值
-    const accounts = this.accountManager.getAccounts();
+    const accounts = await this.accountManager.getAccounts();
     for (const acc of accounts) {
-      const devices = this.configManager.getDevices(acc.id);
+      const devices = await this.configManager.getDevices(acc.id);
       const dev = devices.find(d => d.device_id === deviceId);
       if (dev) {
         currentVolume = dev.volume || 50;
@@ -417,7 +417,7 @@ export class VoiceEngine {
 
     mimusic.log.info(`[VoiceEngine] Set volume: current=${currentVolume} target=${targetVolume} param=${param}`);
 
-    const ok = this.minaService.setVolume(accountId, deviceId, targetVolume);
+    const ok = await this.minaService.setVolume(accountId, deviceId, targetVolume);
     if (ok) {
       mimusic.log.info(`[VoiceEngine] Volume set to: ${targetVolume}`);
     } else {
@@ -428,9 +428,9 @@ export class VoiceEngine {
   /**
    * 执行下一首
    */
-  private executeNext(accountId: string, deviceId: string): void {
-    const pm = this.playlistManagerMap.getOrCreate(accountId, deviceId);
-    const ok = pm.next();
+  private async executeNext(accountId: string, deviceId: string): Promise<void> {
+    const pm = await this.playlistManagerMap.getOrCreate(accountId, deviceId);
+    const ok = await pm.next();
     if (ok) {
       mimusic.log.info(`[VoiceEngine] Next song success`);
     } else {
@@ -441,9 +441,9 @@ export class VoiceEngine {
   /**
    * 执行上一首
    */
-  private executePrevious(accountId: string, deviceId: string): void {
-    const pm = this.playlistManagerMap.getOrCreate(accountId, deviceId);
-    const ok = pm.previous();
+  private async executePrevious(accountId: string, deviceId: string): Promise<void> {
+    const pm = await this.playlistManagerMap.getOrCreate(accountId, deviceId);
+    const ok = await pm.previous();
     if (ok) {
       mimusic.log.info(`[VoiceEngine] Previous song success`);
     } else {
@@ -454,9 +454,9 @@ export class VoiceEngine {
   /**
    * 执行停止播放
    */
-  private executeStop(accountId: string, deviceId: string): void {
-    const pm = this.playlistManagerMap.getOrCreate(accountId, deviceId);
-    pm.stop();
+  private async executeStop(accountId: string, deviceId: string): Promise<void> {
+    const pm = await this.playlistManagerMap.getOrCreate(accountId, deviceId);
+    await pm.stop();
     mimusic.log.info(`[VoiceEngine] Playback stopped`);
   }
 
@@ -466,10 +466,10 @@ export class VoiceEngine {
    * 从设备ID反查 accountId
    * 遍历所有账号的设备列表，找到包含该 deviceId 的账号
    */
-  private findAccountForDevice(deviceId: string): string | null {
-    const accounts = this.accountManager.getAccounts();
+  private async findAccountForDevice(deviceId: string): Promise<string | null> {
+    const accounts = await this.accountManager.getAccounts();
     for (const acc of accounts) {
-      const devices = this.configManager.getDevices(acc.id);
+      const devices = await this.configManager.getDevices(acc.id);
       if (devices.some(d => d.device_id === deviceId)) {
         return acc.id;
       }

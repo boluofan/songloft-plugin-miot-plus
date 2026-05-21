@@ -58,9 +58,9 @@ export function registerConfigHandlers(
 ): void {
 
   // GET /config - 获取配置
-  router.get('/config', (req: HTTPRequest) => {
+  router.get('/config', (async (req: HTTPRequest) => {
     try {
-      const config = configManager.getConfig();
+      const config = await configManager.getConfig();
       return jsonResponse({
         success: true,
         data: {
@@ -75,13 +75,13 @@ export function registerConfigHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) }, 500);
     }
-  });
+  }) as any);
 
   // POST /config - 更新配置
-  router.post('/config', (req: HTTPRequest) => {
+  router.post('/config', (async (req: HTTPRequest) => {
     try {
       const body = parseBody(req);
-      const config = configManager.getConfig();
+      const config = await configManager.getConfig();
 
       // 更新 server_host
       if (body.server_host !== undefined) {
@@ -125,7 +125,7 @@ export function registerConfigHandlers(
         }
       }
 
-      configManager.saveConfig(config);
+      await configManager.saveConfig(config);
 
       // 检查保存后的地址是否有效，附带 warning
       let warning = '';
@@ -143,5 +143,5 @@ export function registerConfigHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) }, 500);
     }
-  });
+  }) as any);
 }

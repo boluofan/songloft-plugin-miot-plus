@@ -54,9 +54,9 @@ export class AuthService {
    * 2. 创建 MinaAuth 执行3步登录
    * 3. 根据结果处理验证码/短信验证/成功/失败
    */
-  login(accountId: string, username: string, password: string): LoginResult {
+  async login(accountId: string, username: string, password: string): Promise<LoginResult> {
     // 确保账号存在
-    this.ensureAccountExists(accountId, username);
+    await this.ensureAccountExists(accountId, username);
 
     // 创建 MinaAuth 实例和登录会话
     const auth = new MinaAuth();
@@ -67,7 +67,7 @@ export class AuthService {
     session.auth = auth;
 
     // 执行登录
-    const result = auth.login(username, password);
+    const result = await auth.login(username, password);
 
     // 处理登录结果
     if (result.state === LoginState.NEED_CAPTCHA) {
@@ -95,16 +95,16 @@ export class AuthService {
       this.sessionManager.deleteSession(accountId);
 
       // 创建 MinaHTTPClient 并保存
-      this.setupMinaClient(accountId, result.tokenInfo);
+      await this.setupMinaClient(accountId, result.tokenInfo);
 
       // 保存密码和登录方式
-      this.configManager.updateAccount(accountId, {
+      await this.configManager.updateAccount(accountId, {
         password,
         login_method: 'password',
       });
 
       // 保存 token 信息
-      this.saveTokenInfo(accountId, result.tokenInfo);
+      await this.saveTokenInfo(accountId, result.tokenInfo);
 
       return { state: 'success', message: '登录成功' };
     }
@@ -122,13 +122,13 @@ export class AuthService {
    * 提交图形验证码
    * 从 session 恢复之前的 MinaAuth 实例继续登录流程
    */
-  submitCaptcha(accountId: string, captchaCode: string): LoginResult {
+  async submitCaptcha(accountId: string, captchaCode: string): Promise<LoginResult> {
     const session = this.sessionManager.getSession(accountId);
     if (!session || !session.auth) {
       return { state: 'failed', message: '会话已过期，请重新登录' };
     }
 
-    const result = session.auth.loginWithCaptcha(captchaCode, MINA_SID);
+    const result = await session.auth.loginWithCaptcha(captchaCode, MINA_SID);
     return this.handleAuthResult(accountId, session, result);
   }
 
@@ -138,13 +138,13 @@ export class AuthService {
    * 提交短信/邮箱验证码
    * 从 session 恢复之前的 MinaAuth 实例继续登录流程
    */
-  submitVerifyCode(accountId: string, code: string): LoginResult {
+  async submitVerifyCode(accountId: string, code: string): Promise<LoginResult> {
     const session = this.sessionManager.getSession(accountId);
     if (!session || !session.auth) {
       return { state: 'failed', message: '会话已过期，请重新登录' };
     }
 
-    const result = session.auth.loginWithVerifyCode(code, MINA_SID);
+    const result = await session.auth.loginWithVerifyCode(code, MINA_SID);
     return this.handleAuthResult(accountId, session, result);
   }
 
@@ -154,14 +154,14 @@ export class AuthService {
    * 手动设置 passToken + userId
    * 使用 passToken 换取 micoapi 的 serviceToken
    */
-  setToken(accountId: string, passToken: string, userId: string): LoginResult {
+  async setToken(accountId: string, passToken: string, userId: string): Promise<LoginResult> {
     // 确保账号存在（使用 userId 作为账号标识）
-    this.ensureAccountExists(userId, userId);
+    await this.ensureAccountExists(userId, userId);
     const effectiveAccountId = userId;
 
     // 使用 MinaAuth 交换 serviceToken
     const auth = new MinaAuth();
-    const result = auth.refreshByPassToken(passToken, userId, MINA_SID);
+    const result = await auth.refreshByPassToken(passToken, userId, MINA_SID);
 
     if (result.state !== LoginState.SUCCESS || !result.tokenInfo) {
       return {
@@ -171,17 +171,17 @@ export class AuthService {
     }
 
     // 创建 MinaHTTPClient 并保存
-    this.setupMinaClient(effectiveAccountId, result.tokenInfo);
+    await this.setupMinaClient(effectiveAccountId, result.tokenInfo);
 
     // 保存 passToken 和登录方式
-    this.configManager.updateAccount(effectiveAccountId, {
+    await this.configManager.updateAccount(effectiveAccountId, {
       pass_token: passToken,
       user_id: userId,
       login_method: 'token',
     });
 
     // 保存 token 信息
-    this.saveTokenInfo(effectiveAccountId, result.tokenInfo);
+    await this.saveTokenInfo(effectiveAccountId, result.tokenInfo);
 
     return { state: 'success', message: '令牌设置成功' };
   }
@@ -193,13 +193,13 @@ export class AuthService {
    * 创建 QRCodeLogin 实例并获取二维码
    * @returns 二维码信息或 null
    */
-  startQRCodeLogin(accountId: string): { qrcodeUrl: string; loginUrl: string } | null {
+  async startQRCodeLogin(accountId: string): Promise<{ qrcodeUrl: string; loginUrl: string } | null> {
     // 创建 QRCodeLogin 实例
     const qrLogin = new QRCodeLogin();
     this.qrLogins.set(accountId, qrLogin);
 
     // 获取二维码
-    const qrInfo = qrLogin.getQRCode();
+    const qrInfo = await qrLogin.getQRCode();
     if (!qrInfo) {
       this.qrLogins.delete(accountId);
       return null;
@@ -216,13 +216,13 @@ export class AuthService {
    * 调用 QRCodeLogin.poll() 检查扫码进度
    * 成功后创建 MinaHTTPClient 并保存凭证
    */
-  pollQRCode(accountId: string): PollResult {
+  async pollQRCode(accountId: string): Promise<PollResult> {
     const qrLogin = this.qrLogins.get(accountId);
     if (!qrLogin) {
       return { state: 'failed', message: '没有进行中的扫码登录' };
     }
 
-    const result = qrLogin.poll();
+    const result = await qrLogin.poll();
 
     // 扫码成功，完成后续流程
     if (result.state === 'confirmed' && result.tokenInfo) {
@@ -235,15 +235,15 @@ export class AuthService {
       // 否则旧账号会残留在 storage 中，导致 relogin/设备查询用错误的 ID
       if (effectiveAccountId !== accountId) {
         try {
-          this.accountManager.deleteAccount(accountId);
+          await this.accountManager.deleteAccount(accountId);
           console.log(`[auth] pollQRCode: cleaned up temporary account: ${accountId}`);
         } catch {
           // 旧账号可能不存在（首次登录），忽略
         }
       }
 
-      this.ensureAccountExists(effectiveAccountId, effectiveAccountId);
-      this.setupMinaClient(effectiveAccountId, result.tokenInfo);
+      await this.ensureAccountExists(effectiveAccountId, effectiveAccountId);
+      await this.setupMinaClient(effectiveAccountId, result.tokenInfo);
 
       // 将实际的 account_id 写入 result，供 handler 返回给前端
       result.account_id = effectiveAccountId;
@@ -259,10 +259,10 @@ export class AuthService {
         if (result.passToken) {
           updates.pass_token = result.passToken;
         }
-        this.configManager.updateAccount(effectiveAccountId, updates);
+        await this.configManager.updateAccount(effectiveAccountId, updates);
 
         // 保存 token 信息
-        this.saveTokenInfo(effectiveAccountId, result.tokenInfo);
+        await this.saveTokenInfo(effectiveAccountId, result.tokenInfo);
 
         // 启动 Token 刷新定时器
         this.startTokenRefresh(effectiveAccountId);
@@ -284,8 +284,8 @@ export class AuthService {
   /**
    * 获取账号认证状态（返回与 Go 后端 AuthStatusResponse 一致的格式）
    */
-  getAuthStatus(accountId: string): { id: string; logged_in: boolean; is_valid: boolean; user_id: string; login_method: string; account_name: string } {
-    const account = this.configManager.getAccount(accountId);
+  async getAuthStatus(accountId: string): Promise<{ id: string; logged_in: boolean; is_valid: boolean; user_id: string; login_method: string; account_name: string }> {
+    const account = await this.configManager.getAccount(accountId);
     if (!account) {
       return { id: accountId, logged_in: false, is_valid: false, user_id: '', login_method: '', account_name: '' };
     }
@@ -311,9 +311,13 @@ export class AuthService {
   /**
    * 获取所有账号的认证状态
    */
-  getAllAuthStatus(): Array<{ id: string; logged_in: boolean; is_valid: boolean; user_id: string; login_method: string; account_name: string }> {
-    const accounts = this.configManager.getAccounts();
-    return accounts.map(acc => this.getAuthStatus(acc.id));
+  async getAllAuthStatus(): Promise<Array<{ id: string; logged_in: boolean; is_valid: boolean; user_id: string; login_method: string; account_name: string }>> {
+    const accounts = await this.configManager.getAccounts();
+    const results = [];
+    for (const acc of accounts) {
+      results.push(await this.getAuthStatus(acc.id));
+    }
+    return results;
   }
 
   // ===== 重新登录 =====
@@ -323,7 +327,7 @@ export class AuthService {
    * 优先尝试 passToken → serviceToken → 密码
    * 带60s最小间隔保护（防止雪崩）
    */
-  relogin(accountId: string): LoginResult {
+  async relogin(accountId: string): Promise<LoginResult> {
     // 60s 最小间隔保护
     const lastTime = this.lastReloginTime.get(accountId);
     if (lastTime && Date.now() - lastTime < RELOGIN_MIN_INTERVAL_MS) {
@@ -334,14 +338,14 @@ export class AuthService {
     console.log(`[auth] relogin starting, account=${accountId}`);
     this.lastReloginTime.set(accountId, Date.now());
 
-    const accountConfig = this.configManager.getAccount(accountId);
+    const accountConfig = await this.configManager.getAccount(accountId);
     if (!accountConfig) {
       return { state: 'failed', message: '账号配置不存在' };
     }
 
     // 优先尝试 passToken 刷新
     if (accountConfig.pass_token) {
-      if (this.refreshServiceTokenByPassToken(accountId, accountConfig.pass_token, accountConfig.user_id)) {
+      if (await this.refreshServiceTokenByPassToken(accountId, accountConfig.pass_token, accountConfig.user_id)) {
         console.log(`[auth] relogin with passToken succeeded, account=${accountId}`);
         return { state: 'success', message: 'passToken 刷新成功' };
       }
@@ -350,7 +354,7 @@ export class AuthService {
     // 尝试已有的 serviceToken 重新登录
     const micoService = accountConfig.services[MINA_SID];
     if (micoService && micoService.service_token && accountConfig.user_id) {
-      if (this.autoLoginWithToken(accountId, accountConfig.user_id, micoService.service_token, micoService.ssecurity, micoService.expires_at)) {
+      if (await this.autoLoginWithToken(accountId, accountConfig.user_id, micoService.service_token, micoService.ssecurity, micoService.expires_at)) {
         console.log(`[auth] relogin with token succeeded, account=${accountId}`);
         this.lastReloginTime.set(accountId, Date.now());
         return { state: 'success', message: 'Token 重登录成功' };
@@ -360,7 +364,7 @@ export class AuthService {
 
     // 尝试密码重新登录
     if (accountConfig.password) {
-      const loginResult = this.autoLoginWithPassword(accountId, accountConfig.account, accountConfig.password);
+      const loginResult = await this.autoLoginWithPassword(accountId, accountConfig.account, accountConfig.password);
       if (loginResult) {
         console.log(`[auth] relogin with password succeeded, account=${accountId}`);
         return { state: 'success', message: '密码重登录成功' };
@@ -381,7 +385,9 @@ export class AuthService {
     this.stopTokenRefresh(accountId);
 
     const timerId = setInterval(() => {
-      this.refreshToken(accountId);
+      this.refreshToken(accountId).catch(e => {
+        console.log(`[auth] refreshToken error: account=${accountId} error=${e?.message || e}`);
+      });
     }, TOKEN_REFRESH_INTERVAL_MS);
 
     this.refreshTimers.set(accountId, timerId);
@@ -406,8 +412,8 @@ export class AuthService {
    * 自动登录所有已保存Token的账号
    * 遍历所有账号配置，根据凭证状态执行不同的恢复策略
    */
-  autoLoginAll(): void {
-    const accounts = this.configManager.getAccounts();
+  async autoLoginAll(): Promise<void> {
+    const accounts = await this.configManager.getAccounts();
     if (accounts.length === 0) {
       console.log('[auth] autoLoginAll: no accounts found');
       return;
@@ -417,7 +423,7 @@ export class AuthService {
 
     for (const account of accounts) {
       try {
-        this.autoLoginAccount(account.id);
+        await this.autoLoginAccount(account.id);
       } catch (e: any) {
         console.log(`[auth] autoLoginAll: failed for account=${account.id}: ${e.message || e}`);
       }
@@ -453,8 +459,8 @@ export class AuthService {
    * 检查 Token 过期时间，接近过期时主动刷新
    * 优先策略：passToken → serviceToken → 密码
    */
-  private refreshToken(accountId: string): boolean {
-    const accountConfig = this.configManager.getAccount(accountId);
+  private async refreshToken(accountId: string): Promise<boolean> {
+    const accountConfig = await this.configManager.getAccount(accountId);
     if (!accountConfig) {
       console.log(`[auth] refreshToken: account config not found, account=${accountId}`);
       return false;
@@ -481,7 +487,7 @@ export class AuthService {
 
     // 优先使用 passToken 刷新
     if (accountConfig.pass_token && accountConfig.user_id) {
-      if (this.refreshServiceTokenByPassToken(accountId, accountConfig.pass_token, accountConfig.user_id)) {
+      if (await this.refreshServiceTokenByPassToken(accountId, accountConfig.pass_token, accountConfig.user_id)) {
         console.log(`[auth] refreshToken: passToken refresh succeeded, account=${accountId}`);
         return true;
       }
@@ -490,7 +496,7 @@ export class AuthService {
 
     // 尝试已有 serviceToken 刷新
     if (micoService && micoService.service_token && accountConfig.user_id) {
-      if (this.autoLoginWithToken(accountId, accountConfig.user_id, micoService.service_token, micoService.ssecurity, micoService.expires_at)) {
+      if (await this.autoLoginWithToken(accountId, accountConfig.user_id, micoService.service_token, micoService.ssecurity, micoService.expires_at)) {
         console.log(`[auth] refreshToken: token login succeeded, account=${accountId}`);
         return true;
       }
@@ -498,7 +504,7 @@ export class AuthService {
 
     // 尝试密码重登
     if (accountConfig.password && accountConfig.account) {
-      if (this.autoLoginWithPassword(accountId, accountConfig.account, accountConfig.password)) {
+      if (await this.autoLoginWithPassword(accountId, accountConfig.account, accountConfig.password)) {
         console.log(`[auth] refreshToken: password login succeeded, account=${accountId}`);
         return true;
       }
@@ -513,7 +519,7 @@ export class AuthService {
    * 带60s最小间隔保护（防止雪崩）
    * @returns true 如果刷新成功
    */
-  private handleTokenExpired(accountId: string): boolean {
+  private async handleTokenExpired(accountId: string): Promise<boolean> {
     // 60s 最小间隔保护
     const lastTime = this.lastReloginTime.get(accountId);
     if (lastTime && Date.now() - lastTime < RELOGIN_MIN_INTERVAL_MS) {
@@ -524,7 +530,7 @@ export class AuthService {
     console.log(`[auth] handleTokenExpired: refreshing token, account=${accountId}`);
     this.lastReloginTime.set(accountId, Date.now());
 
-    const success = this.refreshToken(accountId);
+    const success = await this.refreshToken(accountId);
     if (success) {
       // 刷新成功，更新当前客户端的 tokenInfo
       const newClient = this.accountManager.getMinaClient(accountId) as MinaHTTPClient | null;
@@ -541,13 +547,13 @@ export class AuthService {
   /**
    * 使用 passToken 换取新的 serviceToken
    */
-  private refreshServiceTokenByPassToken(accountId: string, passToken: string, userId: string): boolean {
+  private async refreshServiceTokenByPassToken(accountId: string, passToken: string, userId: string): Promise<boolean> {
     if (!passToken || !userId) return false;
 
     console.log(`[auth] refreshing serviceToken via passToken, account=${accountId}`);
 
     const auth = new MinaAuth();
-    const result = auth.refreshByPassToken(passToken, userId, MINA_SID);
+    const result = await auth.refreshByPassToken(passToken, userId, MINA_SID);
 
     if (result.state !== LoginState.SUCCESS || !result.tokenInfo) {
       console.log(`[auth] passToken refresh failed, account=${accountId}`);
@@ -563,14 +569,14 @@ export class AuthService {
       result.tokenInfo.services[MINA_SID]?.ssecurity || '',
     );
 
-    if (!client.validateToken()) {
+    if (!(await client.validateToken())) {
       console.log(`[auth] refreshed token validation failed, account=${accountId}`);
       return false;
     }
 
     // 验证通过，保存客户端
-    this.setupMinaClient(accountId, result.tokenInfo);
-    this.saveTokenInfo(accountId, result.tokenInfo);
+    await this.setupMinaClient(accountId, result.tokenInfo);
+    await this.saveTokenInfo(accountId, result.tokenInfo);
 
     return true;
   }
@@ -579,13 +585,13 @@ export class AuthService {
    * 使用已有 Token 自动登录
    * @returns true 如果登录成功
    */
-  private autoLoginWithToken(
+  private async autoLoginWithToken(
     accountId: string,
     userId: string,
     serviceToken: string,
     ssecurity: string,
     expiresAt: number,
-  ): boolean {
+  ): Promise<boolean> {
     if (!serviceToken) return false;
 
     const client = MinaHTTPClient.fromManualToken(userId, serviceToken, ssecurity);
@@ -600,18 +606,18 @@ export class AuthService {
     }
 
     // 验证 Token 有效性
-    if (!client.validateToken()) {
+    if (!(await client.validateToken())) {
       return false;
     }
 
     // Token 有效，注入失效回调并保存
     const aid = accountId;
-    client.setOnTokenExpired(() => {
+    client.setOnTokenExpired(async () => {
       return this.handleTokenExpired(aid);
     });
 
     this.accountManager.setMinaClient(accountId, client);
-    this.accountManager.setAccountLoggedIn(accountId, client.getTokenInfo());
+    await this.accountManager.setAccountLoggedIn(accountId, client.getTokenInfo());
 
     return true;
   }
@@ -620,11 +626,11 @@ export class AuthService {
    * 使用密码自动登录
    * @returns true 如果登录成功
    */
-  private autoLoginWithPassword(accountId: string, username: string, password: string): boolean {
+  private async autoLoginWithPassword(accountId: string, username: string, password: string): Promise<boolean> {
     if (!password) return false;
 
     const auth = new MinaAuth();
-    const result = auth.login(username, password);
+    const result = await auth.login(username, password);
 
     if (result.state !== LoginState.SUCCESS || !result.tokenInfo) {
       // 需要验证码/短信验证的情况下，自动登录无法完成
@@ -637,8 +643,8 @@ export class AuthService {
     }
 
     // 登录成功，创建客户端
-    this.setupMinaClient(accountId, result.tokenInfo);
-    this.saveTokenInfo(accountId, result.tokenInfo);
+    await this.setupMinaClient(accountId, result.tokenInfo);
+    await this.saveTokenInfo(accountId, result.tokenInfo);
 
     return true;
   }
@@ -647,8 +653,8 @@ export class AuthService {
    * 自动登录指定账号
    * 根据配置选择最优的登录策略
    */
-  private autoLoginAccount(accountId: string): void {
-    const accountConfig = this.configManager.getAccount(accountId);
+  private async autoLoginAccount(accountId: string): Promise<void> {
+    const accountConfig = await this.configManager.getAccount(accountId);
     if (!accountConfig) {
       console.log(`[auth] autoLoginAccount: account config not found, account=${accountId}`);
       return;
@@ -668,7 +674,7 @@ export class AuthService {
             console.log(`[auth] autoLoginAccount: serviceToken expiring soon, proactively refreshing, account=${accountId}`);
           }
 
-          if (this.refreshServiceTokenByPassToken(accountId, accountConfig.pass_token, accountConfig.user_id)) {
+          if (await this.refreshServiceTokenByPassToken(accountId, accountConfig.pass_token, accountConfig.user_id)) {
             console.log(`[auth] autoLoginAccount: passToken refresh succeeded, account=${accountId}`);
             this.startTokenRefresh(accountId);
             return;
@@ -681,7 +687,7 @@ export class AuthService {
     // 尝试 Token 登录
     const micoService = accountConfig.services[MINA_SID];
     if (micoService && micoService.service_token && accountConfig.user_id) {
-      if (this.autoLoginWithToken(accountId, accountConfig.user_id, micoService.service_token, micoService.ssecurity, micoService.expires_at)) {
+      if (await this.autoLoginWithToken(accountId, accountConfig.user_id, micoService.service_token, micoService.ssecurity, micoService.expires_at)) {
         console.log(`[auth] autoLoginAccount: token login succeeded, account=${accountId}`);
         this.startTokenRefresh(accountId);
         return;
@@ -691,7 +697,7 @@ export class AuthService {
 
     // 尝试密码登录
     if (accountConfig.password && accountConfig.account) {
-      if (this.autoLoginWithPassword(accountId, accountConfig.account, accountConfig.password)) {
+      if (await this.autoLoginWithPassword(accountId, accountConfig.account, accountConfig.password)) {
         console.log(`[auth] autoLoginAccount: password login succeeded, account=${accountId}`);
         this.startTokenRefresh(accountId);
         return;
@@ -704,23 +710,23 @@ export class AuthService {
   /**
    * 处理 MinaAuth 认证结果（用于 submitCaptcha/submitVerifyCode）
    */
-  private handleAuthResult(
+  private async handleAuthResult(
     accountId: string,
     session: LoginSession,
     result: { state: LoginStateType; error?: string; tokenInfo?: XiaomiTokenInfo; captchaImage?: string; verifyUrl?: string; verifyType?: string },
-  ): LoginResult {
+  ): Promise<LoginResult> {
     if (result.state === LoginState.SUCCESS && result.tokenInfo) {
       session.state = 'success';
       this.sessionManager.deleteSession(accountId);
 
       // 创建 MinaHTTPClient 并保存
-      this.setupMinaClient(accountId, result.tokenInfo);
+      await this.setupMinaClient(accountId, result.tokenInfo);
 
       // 保存登录方式
-      this.configManager.updateAccount(accountId, { login_method: 'password' });
+      await this.configManager.updateAccount(accountId, { login_method: 'password' });
 
       // 保存 token 信息
-      this.saveTokenInfo(accountId, result.tokenInfo);
+      await this.saveTokenInfo(accountId, result.tokenInfo);
 
       return { state: 'success', message: '登录成功' };
     }
@@ -751,13 +757,13 @@ export class AuthService {
   /**
    * 创建 MinaHTTPClient 并注入 Token 失效回调，保存到 AccountManager
    */
-  private setupMinaClient(accountId: string, tokenInfo: XiaomiTokenInfo): void {
+  private async setupMinaClient(accountId: string, tokenInfo: XiaomiTokenInfo): Promise<void> {
     const client = new MinaHTTPClient(tokenInfo);
 
     // 注入 token 失效回调
     const aid = accountId;
-    client.setOnTokenExpired(() => {
-      const refreshed = this.handleTokenExpired(aid);
+    client.setOnTokenExpired(async () => {
+      const refreshed = await this.handleTokenExpired(aid);
       if (refreshed) {
         // 刷新成功后，同步新客户端的 tokenInfo 到当前客户端
         const newClient = this.accountManager.getMinaClient(aid) as MinaHTTPClient | null;
@@ -769,20 +775,20 @@ export class AuthService {
     });
 
     this.accountManager.setMinaClient(accountId, client);
-    this.accountManager.setAccountLoggedIn(accountId, tokenInfo);
+    await this.accountManager.setAccountLoggedIn(accountId, tokenInfo);
   }
 
   /**
    * 保存 Token 信息到配置持久化
    */
-  private saveTokenInfo(accountId: string, tokenInfo: XiaomiTokenInfo): void {
+  private async saveTokenInfo(accountId: string, tokenInfo: XiaomiTokenInfo): Promise<void> {
     const updates: Record<string, any> = {
       user_id: tokenInfo.user_id,
       services: tokenInfo.services,
     };
 
     try {
-      this.configManager.updateAccount(accountId, updates);
+      await this.configManager.updateAccount(accountId, updates);
     } catch (e: any) {
       console.log(`[auth] saveTokenInfo: failed, account=${accountId}: ${e.message || e}`);
     }
@@ -791,11 +797,11 @@ export class AuthService {
   /**
    * 确保账号存在，不存在则创建
    */
-  private ensureAccountExists(accountId: string, username: string): void {
-    const existing = this.configManager.getAccount(accountId);
+  private async ensureAccountExists(accountId: string, username: string): Promise<void> {
+    const existing = await this.configManager.getAccount(accountId);
     if (!existing) {
       try {
-        this.accountManager.createAccount(accountId, username, 'password');
+        await this.accountManager.createAccount(accountId, username, 'password');
       } catch {
         // 已存在则忽略
       }
