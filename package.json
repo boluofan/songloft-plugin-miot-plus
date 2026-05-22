@@ -1,6 +1,6 @@
 {
   "name": "xiaomi",
-  "version": "2026.5.21",
+  "version": "2026.5.22",
   "description": "小米音箱播放歌曲",
   "private": true,
   "scripts": {
