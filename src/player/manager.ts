@@ -24,8 +24,7 @@ interface Song {
   url: string;
   cover_path: string;
   cover_url: string;
-  lyric: string;
-  lyric_source: string;
+  lyric_url: string;  // 歌词URL（后端统一端点）
   file_size: number;
   format: string;
   bit_rate: number;
