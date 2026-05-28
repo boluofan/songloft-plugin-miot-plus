@@ -1,8 +1,8 @@
 // MIoT 智能音箱插件 - 语音口令引擎
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/voicecmd/engine.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/voicecmd/engine.go
 // 匹配用户语音指令并执行对应动作（播放歌单/歌曲、切歌、停止、音量、播放模式）
 
-/// <reference types="@mimusic/plugin-sdk" />
+/// <reference types="@songloft/plugin-sdk" />
 
 import { ConfigManager } from '../config/manager';
 import { AccountManager } from '../account/manager';
@@ -35,7 +35,7 @@ const COMMAND_PRIORITY: Record<string, number> = {
 
 /**
  * 获取默认语音口令配置（12 条）
- * 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/config/manager.go GetDefaultVoiceCommands()
+ * 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/config/manager.go GetDefaultVoiceCommands()
  */
 export function getDefaultVoiceCommands(): VoiceCommand[] {
   return [
@@ -87,7 +87,7 @@ export class VoiceEngine {
   /** 启用/禁用语音口令引擎 */
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    mimusic.log.info(`[VoiceEngine] ${enabled ? 'Enabled' : 'Disabled'}`);
+    songloft.log.info(`[VoiceEngine] ${enabled ? 'Enabled' : 'Disabled'}`);
   }
 
   /** 是否已启用 */
@@ -116,12 +116,12 @@ export class VoiceEngine {
       return;
     }
 
-    mimusic.log.info(`[VoiceEngine] Command matched type=${result.command.type} keyword="${result.keyword}" argument="${result.argument}" device=${msg.device_id}`);
+    songloft.log.info(`[VoiceEngine] Command matched type=${result.command.type} keyword="${result.keyword}" argument="${result.argument}" device=${msg.device_id}`);
 
     // 找到设备对应的 accountId
     const accountId = await this.findAccountForDevice(msg.device_id);
     if (!accountId) {
-      mimusic.log.warn(`[VoiceEngine] No account found for device: ${msg.device_id}`);
+      songloft.log.warn(`[VoiceEngine] No account found for device: ${msg.device_id}`);
       return;
     }
 
@@ -212,7 +212,7 @@ export class VoiceEngine {
         await this.executeStop(accountId, deviceId);
         break;
       default:
-        mimusic.log.warn(`[VoiceEngine] Unknown command type: ${result.command.type}`);
+        songloft.log.warn(`[VoiceEngine] Unknown command type: ${result.command.type}`);
     }
   }
 
@@ -226,7 +226,7 @@ export class VoiceEngine {
     // 空参数处理：继续上次播放或使用默认歌单
     if (!playlistName) {
       if (pm.hasPlaylist()) {
-        mimusic.log.info('[VoiceEngine] Play playlist: resume last playback');
+        songloft.log.info('[VoiceEngine] Play playlist: resume last playback');
         await pm.next(); // 触发播放
         return;
       }
@@ -234,21 +234,21 @@ export class VoiceEngine {
       // 使用第一个歌单
       const playlists = this.indexingManager.searchPlaylist('');
       if (playlists.length === 0) {
-        mimusic.log.warn('[VoiceEngine] No playlists available');
+        songloft.log.warn('[VoiceEngine] No playlists available');
         return;
       }
       playlistName = playlists[0].name;
-      mimusic.log.info(`[VoiceEngine] No name specified, using default playlist: ${playlistName}`);
+      songloft.log.info(`[VoiceEngine] No name specified, using default playlist: ${playlistName}`);
     }
 
     // 模糊匹配歌单
     const matchedPlaylist = this.indexingManager.findPlaylistByName(playlistName);
     if (!matchedPlaylist) {
-      mimusic.log.warn(`[VoiceEngine] Playlist not found: ${playlistName}`);
+      songloft.log.warn(`[VoiceEngine] Playlist not found: ${playlistName}`);
       return;
     }
 
-    mimusic.log.info(`[VoiceEngine] Matched playlist: ${matchedPlaylist.name} (id=${matchedPlaylist.id})`);
+    songloft.log.info(`[VoiceEngine] Matched playlist: ${matchedPlaylist.name} (id=${matchedPlaylist.id})`);
 
     // 获取设备配置中的播放模式和起始位置
     let startIndex = 0;
@@ -269,9 +269,9 @@ export class VoiceEngine {
     // 播放歌单
     const ok = await pm.play(matchedPlaylist.id, startIndex, playMode);
     if (ok) {
-      mimusic.log.info(`[VoiceEngine] Play playlist success: ${matchedPlaylist.name} index=${startIndex} mode=${playMode}`);
+      songloft.log.info(`[VoiceEngine] Play playlist success: ${matchedPlaylist.name} index=${startIndex} mode=${playMode}`);
     } else {
-      mimusic.log.error(`[VoiceEngine] Play playlist failed: ${matchedPlaylist.name}`);
+      songloft.log.error(`[VoiceEngine] Play playlist failed: ${matchedPlaylist.name}`);
     }
   }
 
@@ -286,28 +286,28 @@ export class VoiceEngine {
     // 空参数处理：继续上次播放
     if (!songName) {
       if (pm.hasPlaylist()) {
-        mimusic.log.info('[VoiceEngine] Play song: resume last playback');
+        songloft.log.info('[VoiceEngine] Play song: resume last playback');
         await pm.next();
         return;
       }
-      mimusic.log.warn('[VoiceEngine] No song name specified and no active playlist');
+      songloft.log.warn('[VoiceEngine] No song name specified and no active playlist');
       return;
     }
 
     // 检查索引是否就绪
     if (!this.indexingManager.isIndexReady()) {
-      mimusic.log.warn('[VoiceEngine] Song index not ready, skip play song');
+      songloft.log.warn('[VoiceEngine] Song index not ready, skip play song');
       return;
     }
 
     // 从索引中模糊匹配歌曲，获取歌单ID和歌曲索引
     const loc = await this.indexingManager.findSongByName(songName);
     if (!loc) {
-      mimusic.log.warn(`[VoiceEngine] Song not found: ${songName}`);
+      songloft.log.warn(`[VoiceEngine] Song not found: ${songName}`);
       return;
     }
 
-    mimusic.log.info(`[VoiceEngine] Matched song: ${loc.songTitle} - ${loc.artist} playlist="${loc.playlistName}" playlistId=${loc.playlistId} songIndex=${loc.songIndex}`);
+    songloft.log.info(`[VoiceEngine] Matched song: ${loc.songTitle} - ${loc.artist} playlist="${loc.playlistName}" playlistId=${loc.playlistId} songIndex=${loc.songIndex}`);
 
     // 获取设备配置中的播放模式
     let playMode: PlayMode = 'order';
@@ -320,9 +320,9 @@ export class VoiceEngine {
     // 播放歌单，从匹配到的歌曲索引开始
     const ok = await pm.play(loc.playlistId, loc.songIndex, playMode);
     if (ok) {
-      mimusic.log.info(`[VoiceEngine] Play song success: ${loc.songTitle} playlist="${loc.playlistName}" index=${loc.songIndex} mode=${playMode}`);
+      songloft.log.info(`[VoiceEngine] Play song success: ${loc.songTitle} playlist="${loc.playlistName}" index=${loc.songIndex} mode=${playMode}`);
     } else {
-      mimusic.log.error(`[VoiceEngine] Play song failed: ${loc.songTitle}`);
+      songloft.log.error(`[VoiceEngine] Play song failed: ${loc.songTitle}`);
     }
   }
 
@@ -332,7 +332,7 @@ export class VoiceEngine {
    */
   private async executeSetPlayMode(accountId: string, deviceId: string, modeParam: string): Promise<void> {
     if (!modeParam) {
-      mimusic.log.warn('[VoiceEngine] Set play mode: missing mode param');
+      songloft.log.warn('[VoiceEngine] Set play mode: missing mode param');
       return;
     }
 
@@ -354,7 +354,7 @@ export class VoiceEngine {
 
     const playMode = modeMap[modeParam];
     if (!playMode) {
-      mimusic.log.warn(`[VoiceEngine] Unknown play mode: ${modeParam}`);
+      songloft.log.warn(`[VoiceEngine] Unknown play mode: ${modeParam}`);
       return;
     }
 
@@ -366,11 +366,11 @@ export class VoiceEngine {
       try {
         await this.configManager.updateDevice(accountId, deviceId, { play_mode: playMode });
       } catch (e) {
-        mimusic.log.error(`[VoiceEngine] Failed to update play mode config: ${String(e)}`);
+        songloft.log.error(`[VoiceEngine] Failed to update play mode config: ${String(e)}`);
       }
     }
 
-    mimusic.log.info(`[VoiceEngine] Play mode set to: ${playMode}`);
+    songloft.log.info(`[VoiceEngine] Play mode set to: ${playMode}`);
   }
 
   /**
@@ -404,7 +404,7 @@ export class VoiceEngine {
       default: {
         const volume = this.extractNumber(argument);
         if (volume === null) {
-          mimusic.log.warn(`[VoiceEngine] No volume number found in: ${argument}`);
+          songloft.log.warn(`[VoiceEngine] No volume number found in: ${argument}`);
           return;
         }
         targetVolume = volume;
@@ -415,13 +415,13 @@ export class VoiceEngine {
     // 限制范围 0-100
     targetVolume = Math.max(0, Math.min(100, targetVolume));
 
-    mimusic.log.info(`[VoiceEngine] Set volume: current=${currentVolume} target=${targetVolume} param=${param}`);
+    songloft.log.info(`[VoiceEngine] Set volume: current=${currentVolume} target=${targetVolume} param=${param}`);
 
     const ok = await this.minaService.setVolume(accountId, deviceId, targetVolume);
     if (ok) {
-      mimusic.log.info(`[VoiceEngine] Volume set to: ${targetVolume}`);
+      songloft.log.info(`[VoiceEngine] Volume set to: ${targetVolume}`);
     } else {
-      mimusic.log.error(`[VoiceEngine] Failed to set volume: ${targetVolume}`);
+      songloft.log.error(`[VoiceEngine] Failed to set volume: ${targetVolume}`);
     }
   }
 
@@ -432,9 +432,9 @@ export class VoiceEngine {
     const pm = await this.playlistManagerMap.getOrCreate(accountId, deviceId);
     const ok = await pm.next();
     if (ok) {
-      mimusic.log.info(`[VoiceEngine] Next song success`);
+      songloft.log.info(`[VoiceEngine] Next song success`);
     } else {
-      mimusic.log.warn(`[VoiceEngine] Next song failed or no next`);
+      songloft.log.warn(`[VoiceEngine] Next song failed or no next`);
     }
   }
 
@@ -445,9 +445,9 @@ export class VoiceEngine {
     const pm = await this.playlistManagerMap.getOrCreate(accountId, deviceId);
     const ok = await pm.previous();
     if (ok) {
-      mimusic.log.info(`[VoiceEngine] Previous song success`);
+      songloft.log.info(`[VoiceEngine] Previous song success`);
     } else {
-      mimusic.log.warn(`[VoiceEngine] Previous song failed or no previous`);
+      songloft.log.warn(`[VoiceEngine] Previous song failed or no previous`);
     }
   }
 
@@ -457,7 +457,7 @@ export class VoiceEngine {
   private async executeStop(accountId: string, deviceId: string): Promise<void> {
     const pm = await this.playlistManagerMap.getOrCreate(accountId, deviceId);
     await pm.stop();
-    mimusic.log.info(`[VoiceEngine] Playback stopped`);
+    songloft.log.info(`[VoiceEngine] Playback stopped`);
   }
 
   // ===== 辅助方法 =====

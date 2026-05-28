@@ -1,7 +1,7 @@
 // MIoT 智能音箱插件 - 加密工具
 // 基于 QuickJS 全局 crypto 对象（由 polyfill 提供）
 
-/// <reference types="@mimusic/plugin-sdk" />
+/// <reference types="@songloft/plugin-sdk" />
 
 // QuickJS polyfill 中 crypto 全局对象的类型声明
 declare const crypto: {

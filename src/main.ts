@@ -1,5 +1,5 @@
-import { createRouter } from '@mimusic/plugin-sdk';
-import type { HTTPRequest, HTTPResponse } from '@mimusic/plugin-sdk';
+import { createRouter } from '@songloft/plugin-sdk';
+import type { HTTPRequest, HTTPResponse } from '@songloft/plugin-sdk';
 import { ConfigManager } from './config/manager';
 import { AccountManager } from './account/manager';
 import { AuthService } from './auth/service';
@@ -38,7 +38,7 @@ let voiceEngine: VoiceEngine;
 let indexingManager: IndexingManager;
 
 async function onInit(): Promise<void> {
-  mimusic.log.info('MIoT 智能音箱插件初始化...');
+  songloft.log.info('MIoT 智能音箱插件初始化...');
 
   // 初始化管理器
   configManager = new ConfigManager();
@@ -54,7 +54,7 @@ async function onInit(): Promise<void> {
   const pluginConfig = await configManager.getConfig();
   if (pluginConfig.server_host) {
     setHostBaseUrl(pluginConfig.server_host);
-    mimusic.log.info('宿主 API 基础 URL 已设置: ' + pluginConfig.server_host);
+    songloft.log.info('宿主 API 基础 URL 已设置: ' + pluginConfig.server_host);
   }
 
   const executor = new TaskExecutor(configManager, accountManager, minaService, playlistManagerMap, indexingManager);
@@ -68,7 +68,7 @@ async function onInit(): Promise<void> {
   if (!existingCommands || existingCommands.length === 0) {
     const defaultCommands = getDefaultVoiceCommands();
     await configManager.saveVoiceCommands(defaultCommands);
-    mimusic.log.info(`[VoiceCmd] Initialized ${defaultCommands.length} default voice commands`);
+    songloft.log.info(`[VoiceCmd] Initialized ${defaultCommands.length} default voice commands`);
   }
 
   // 注册所有路由
@@ -84,12 +84,12 @@ async function onInit(): Promise<void> {
 
   // 自动登录 + 启动后台服务（异步，不阻塞插件初始化）
   authService.autoLoginAll().catch(e => {
-    mimusic.log.error('autoLoginAll failed: ' + String(e));
+    songloft.log.error('autoLoginAll failed: ' + String(e));
   });
   // 异步刷新索引，不阻塞插件初始化
   setTimeout(() => {
     indexingManager.refresh().catch(e => {
-      mimusic.log.error('indexingManager.refresh failed: ' + String(e));
+      songloft.log.error('indexingManager.refresh failed: ' + String(e));
     });
   }, 100);
 
@@ -109,16 +109,16 @@ async function onInit(): Promise<void> {
     voiceEngine.setEnabled(true);
   }
 
-  mimusic.log.info('MIoT 智能音箱插件初始化完成');
+  songloft.log.info('MIoT 智能音箱插件初始化完成');
 }
 
 async function onDeinit(): Promise<void> {
-  mimusic.log.info('MIoT 智能音箱插件停止...');
+  songloft.log.info('MIoT 智能音箱插件停止...');
   scheduler?.stop();
   conversationMonitor?.stop();
   playlistManagerMap?.cleanup();
   authService?.cleanup();
-  mimusic.log.info('MIoT 智能音箱插件已停止');
+  songloft.log.info('MIoT 智能音箱插件已停止');
 }
 
 async function onHTTPRequest(req: HTTPRequest): Promise<HTTPResponse> {

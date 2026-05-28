@@ -1,5 +1,5 @@
 // MIoT 智能音箱插件 - Mina 认证模块
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/pkg/mina/auth.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/pkg/mina/auth.go
 // 实现小米3步登录流程：serviceLogin → serviceLoginAuth2 → 重定向获取 serviceToken
 
 import { CookieJar } from '../utils/cookie';

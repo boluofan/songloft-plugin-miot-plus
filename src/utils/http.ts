@@ -7,7 +7,7 @@
 //
 // 所有方法都返回 Promise，调用方必须 await。
 
-/// <reference types="@mimusic/plugin-sdk" />
+/// <reference types="@songloft/plugin-sdk" />
 
 import { CookieJar, parseCookies } from './cookie';
 
@@ -274,14 +274,14 @@ export function setHostBaseUrl(url: string): void {
   _hostBaseUrl = url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
-/** 调用 MiMusic 宿主 API（自动携带 Bearer token） */
+/** 调用 Songloft 宿主 API（自动携带 Bearer token） */
 export async function callHostAPI<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   if (!_hostBaseUrl) {
     throw new Error('Host base URL not set. Call setHostBaseUrl() first.');
   }
-  const pluginToken = await mimusic.plugin.getToken();
+  const pluginToken = await songloft.plugin.getToken();
   if (!pluginToken) {
-    throw new Error('Plugin token not available from mimusic.plugin.getToken()');
+    throw new Error('Plugin token not available from songloft.plugin.getToken()');
   }
 
   const url = _hostBaseUrl + path;

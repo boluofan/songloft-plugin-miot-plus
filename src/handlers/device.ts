@@ -1,8 +1,8 @@
 // MIoT 智能音箱插件 - 设备控制 Handler
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/handlers/device_handler.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/handlers/device_handler.go
 
-import { jsonResponse, parseQuery } from '@mimusic/plugin-sdk';
-import type { Router, HTTPRequest } from '@mimusic/plugin-sdk';
+import { jsonResponse, parseQuery } from '@songloft/plugin-sdk';
+import type { Router, HTTPRequest } from '@songloft/plugin-sdk';
 import { MinaService } from '../service/service';
 import { AccountManager } from '../account/manager';
 

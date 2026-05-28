@@ -1,5 +1,5 @@
 // MIoT 智能音箱插件 - 扫码登录模块
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/pkg/qrcode/qrcode.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/pkg/qrcode/qrcode.go
 // 实现二维码获取、长轮询、状态管理和 Token 交换
 
 import { CookieJar } from '../utils/cookie';

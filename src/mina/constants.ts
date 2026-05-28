@@ -1,5 +1,5 @@
 // MIoT 智能音箱插件 - Mina API 常量定义
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/pkg/mina/constants.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/pkg/mina/constants.go
 
 /** 小米账号服务基础 URL */
 export const ACCOUNT_BASE_URL = 'https://account.xiaomi.com';

@@ -1,5 +1,5 @@
 // MIoT 智能音箱插件 - 认证服务层
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/auth/service.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/auth/service.go
 // 认证系统的编排层，协调 MinaAuth、QRCodeLogin、AccountManager 完成完整的认证流程
 
 import { MinaAuth } from '../mina/auth';

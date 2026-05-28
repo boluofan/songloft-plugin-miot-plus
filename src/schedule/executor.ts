@@ -1,8 +1,8 @@
 // MIoT 智能音箱插件 - 定时任务执行器
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/schedule/executor.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/schedule/executor.go
 // 解析目标设备，执行 play_playlist/play_playlist_from/stop/set_volume/set_play_mode 动作
 
-/// <reference types="@mimusic/plugin-sdk" />
+/// <reference types="@songloft/plugin-sdk" />
 
 import { ConfigManager } from '../config/manager';
 import { AccountManager } from '../account/manager';
@@ -49,7 +49,7 @@ export class TaskExecutor {
   async execute(task: ScheduledTask): Promise<TaskLog[]> {
     const targets = await this.resolveTargetDevices(task.target);
     if (targets.length === 0) {
-      mimusic.log.warn(`[TaskExecutor] 定时任务无目标设备 task_id=${task.id} name=${task.name}`);
+      songloft.log.warn(`[TaskExecutor] 定时任务无目标设备 task_id=${task.id} name=${task.name}`);
       return [{
         task_id: task.id,
         task_name: task.name,
@@ -127,7 +127,7 @@ export class TaskExecutor {
       }
 
       if (!found) {
-        mimusic.log.warn(`[TaskExecutor] 未找到设备 device_id=${deviceId}`);
+        songloft.log.warn(`[TaskExecutor] 未找到设备 device_id=${deviceId}`);
       }
     }
 
@@ -168,7 +168,7 @@ export class TaskExecutor {
       executed_at: new Date().toISOString(),
     };
 
-    mimusic.log.info(
+    songloft.log.info(
       `[TaskExecutor] 执行定时任务 task_id=${task.id} action=${task.action} account=${target.accountId} device=${target.deviceId}`
     );
 
@@ -197,11 +197,11 @@ export class TaskExecutor {
 
       log.success = true;
       log.message = message;
-      mimusic.log.info(`[TaskExecutor] 定时任务执行成功 task_id=${task.id} device=${target.deviceId}`);
+      songloft.log.info(`[TaskExecutor] 定时任务执行成功 task_id=${task.id} device=${target.deviceId}`);
     } catch (e) {
       log.success = false;
       log.message = e instanceof Error ? e.message : String(e);
-      mimusic.log.error(
+      songloft.log.error(
         `[TaskExecutor] 定时任务执行失败 task_id=${task.id} device=${target.deviceId} error=${log.message}`
       );
     }
@@ -230,7 +230,7 @@ export class TaskExecutor {
       throw new Error(`未找到匹配的歌单: ${playlistName}`);
     }
 
-    mimusic.log.info(`[TaskExecutor] 匹配到歌单 name=${playlistName} matched=${playlist.name} id=${playlist.id}`);
+    songloft.log.info(`[TaskExecutor] 匹配到歌单 name=${playlistName} matched=${playlist.name} id=${playlist.id}`);
 
     // 确定起始位置
     let startIndex = 0;
@@ -238,9 +238,9 @@ export class TaskExecutor {
       const result = await this.indexingManager.findSongInPlaylist(playlist.id, params.song_name);
       if (result.found) {
         startIndex = result.index;
-        mimusic.log.info(`[TaskExecutor] 匹配到歌曲 song_name=${params.song_name} index=${startIndex}`);
+        songloft.log.info(`[TaskExecutor] 匹配到歌曲 song_name=${params.song_name} index=${startIndex}`);
       } else {
-        mimusic.log.warn(`[TaskExecutor] 未找到匹配的歌曲，从第一首开始 song_name=${params.song_name}`);
+        songloft.log.warn(`[TaskExecutor] 未找到匹配的歌曲，从第一首开始 song_name=${params.song_name}`);
       }
     }
 

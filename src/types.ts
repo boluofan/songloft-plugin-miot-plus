@@ -2,7 +2,7 @@
 
 // ===== 账号相关 =====
 
-/** 账号配置（存储在 mimusic.storage 中） */
+/** 账号配置（存储在 songloft.storage 中） */
 export interface AccountConfig {
   id: string;
   account: string;           // 小米账号（用户名/邮箱/手机）

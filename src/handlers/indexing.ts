@@ -1,8 +1,8 @@
 // MIoT 智能音箱插件 - 索引管理 Handler
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/handlers/indexing_handler.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/handlers/indexing_handler.go
 
-import { jsonResponse } from '@mimusic/plugin-sdk';
-import type { Router, HTTPRequest } from '@mimusic/plugin-sdk';
+import { jsonResponse } from '@songloft/plugin-sdk';
+import type { Router, HTTPRequest } from '@songloft/plugin-sdk';
 import { IndexingManager } from '../indexing/manager';
 
 /**

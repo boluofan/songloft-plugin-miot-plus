@@ -1,5 +1,5 @@
 // MIoT 智能音箱插件 - 索引管理模块
-// 从 MiMusic 主程序API获取歌曲/歌单数据，建立内存索引，提供模糊搜索
+// 从 Songloft 主程序API获取歌曲/歌单数据，建立内存索引，提供模糊搜索
 
 // ===== 类型定义 =====
 
@@ -204,7 +204,7 @@ const MAX_SEARCH_RESULTS = 10;
 
 /**
  * 索引管理器
- * 从 MiMusic 宿主API获取歌曲/歌单数据，建立内存索引，提供模糊搜索
+ * 从 Songloft 宿主API获取歌曲/歌单数据，建立内存索引，提供模糊搜索
  */
 export class IndexingManager {
   private songs: IndexedSong[] = [];
@@ -225,10 +225,10 @@ export class IndexingManager {
     this.isRefreshing = true;
     try {
       // 1. 获取歌单列表（桥接直接返回数组）
-      const rawPlaylists = (await mimusic.playlists.list()) ?? [];
+      const rawPlaylists = (await songloft.playlists.list()) ?? [];
 
       // 2. 获取歌曲列表（桥接直接返回数组）
-      const rawSongs = (await mimusic.songs.list({ limit: 10000 })) ?? [];
+      const rawSongs = (await songloft.songs.list({ limit: 10000 })) ?? [];
 
       // 3. 构建歌单索引
       const newPlaylists: IndexedPlaylist[] = rawPlaylists.map(pl => ({
@@ -254,11 +254,11 @@ export class IndexingManager {
       this.lastRefreshTime = Date.now();
       this.indexReady = true;
 
-      mimusic.log.info(`索引构建完成: playlists=${newPlaylists.length} songs=${newSongs.length}`);
+      songloft.log.info(`索引构建完成: playlists=${newPlaylists.length} songs=${newSongs.length}`);
       return { success: true, songCount: newSongs.length, playlistCount: newPlaylists.length };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      mimusic.log.warn(`索引刷新失败: ${msg}`);
+      songloft.log.warn(`索引刷新失败: ${msg}`);
       this.indexReady = false;
       return { success: false, songCount: this.songs.length, playlistCount: this.playlists.length };
     } finally {
@@ -366,12 +366,12 @@ export class IndexingManager {
     // 获取歌单歌曲列表
     let songs: Array<{ id: number; title?: string; artist?: string }> = [];
     try {
-      const result = await mimusic.playlists.getSongs(playlistId);
+      const result = await songloft.playlists.getSongs(playlistId);
       if (result && Array.isArray(result)) {
         songs = result;
       }
     } catch (e) {
-      mimusic.log.warn(`[IndexingManager] 获取歌单歌曲失败: ${e instanceof Error ? e.message : String(e)}`);
+      songloft.log.warn(`[IndexingManager] 获取歌单歌曲失败: ${e instanceof Error ? e.message : String(e)}`);
       return { index: 0, found: false };
     }
 
@@ -416,7 +416,7 @@ export class IndexingManager {
     // 2. 遍历歌单，按需加载歌曲列表查找位置
     for (const pl of this.playlists) {
       try {
-        const plSongs = (await mimusic.playlists.getSongs(pl.id, { limit: 100000 })) ?? [];
+        const plSongs = (await songloft.playlists.getSongs(pl.id, { limit: 100000 })) ?? [];
         for (let idx = 0; idx < plSongs.length; idx++) {
           if (matchedSongIds.has(plSongs[idx].id)) {
             return {
@@ -429,7 +429,7 @@ export class IndexingManager {
           }
         }
       } catch (e) {
-        mimusic.log.warn(`findSongByName: 获取歌单歌曲失败 playlist_id=${pl.id}: ${e instanceof Error ? e.message : String(e)}`);
+        songloft.log.warn(`findSongByName: 获取歌单歌曲失败 playlist_id=${pl.id}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 

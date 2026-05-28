@@ -82,12 +82,12 @@ jobs:
       - name: Create GitHub Release
         id: create_release
         env:
-          GH_TOKEN: ${{ secrets.MIMUSIC_TOKEN_JS_XIAOMI }}
+          GH_TOKEN: ${{ secrets.SONGLOFT_TOKEN_JS_MIOT }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           ENTRY_PATH="${{ steps.plugin_info.outputs.entryPath }}"
           ZIP_NAME="${{ steps.plugin_info.outputs.zip_name }}"
-          REPO="mimusic-org/jsplugins"
+          REPO="songloft-org/jsplugins"
           TAG="jsplugin-${ENTRY_PATH}-${VERSION}"
 
           # 删除已存在的同名 Release（如果存在）
@@ -109,13 +109,13 @@ jobs:
 
       - name: Push version JSON to jsplugins repo
         env:
-          GH_TOKEN: ${{ secrets.MIMUSIC_TOKEN_JS_XIAOMI }}
+          GH_TOKEN: ${{ secrets.SONGLOFT_TOKEN_JS_MIOT }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           ENTRY_PATH="${{ steps.plugin_info.outputs.entryPath }}"
           ZIP_NAME="${{ steps.plugin_info.outputs.zip_name }}"
           TAG="jsplugin-${ENTRY_PATH}-${VERSION}"
-          REPO="mimusic-org/jsplugins"
+          REPO="songloft-org/jsplugins"
           DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${ZIP_NAME}"
           JSON_PATH="${ENTRY_PATH}.json"
 
@@ -138,9 +138,9 @@ jobs:
           fi
           echo "Pushed ${JSON_PATH} to ${REPO}"
 
-      - name: Post comment to mimusic issue
+      - name: Post comment to songloft issue
         env:
-          GH_TOKEN: ${{ secrets.MIMUSIC_TOKEN_JS_XIAOMI }}
+          GH_TOKEN: ${{ secrets.SONGLOFT_TOKEN_JS_MIOT }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           FILE_URL="${{ steps.create_release.outputs.file_url }}"
@@ -153,12 +153,12 @@ jobs:
 
           # 删除该 issue 下包含同名 zip 的旧评论
           EXISTING_COMMENT_IDS=$(gh api \
-            repos/mimusic-org/mimusic/issues/4/comments \
+            repos/songloft-org/songloft/issues/4/comments \
             --paginate \
             --jq ".[] | select(.body | contains(\"${ZIP_NAME}\")) | .id")
           for COMMENT_ID in $EXISTING_COMMENT_IDS; do
             echo "Deleting old comment: ${COMMENT_ID}"
-            gh api --method DELETE repos/mimusic-org/mimusic/issues/comments/${COMMENT_ID}
+            gh api --method DELETE repos/songloft-org/songloft/issues/comments/${COMMENT_ID}
           done
 
           COMMENT=$(cat <<EOF
@@ -182,5 +182,5 @@ jobs:
           )
 
           echo "$COMMENT" | gh issue comment 4 \
-            --repo mimusic-org/mimusic \
+            --repo songloft-org/songloft \
             --body-file -

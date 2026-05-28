@@ -1,5 +1,5 @@
 // MIoT 智能音箱插件 - URL构造器
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/player/url_builder.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/player/url_builder.go
 
 import { getHostBaseUrl } from '../utils/http';
 
@@ -35,7 +35,7 @@ export class URLBuilder {
 
     // 相对路径（/api/v1/songs/{id}/play）需要附加 access_token
     const serverHost = getHostBaseUrl();
-    const accessToken = await mimusic.plugin.getToken();
+    const accessToken = await songloft.plugin.getToken();
     const separator = songUrl.includes('?') ? '&' : '?';
     return serverHost + songUrl + separator + 'access_token=' + accessToken;
   }

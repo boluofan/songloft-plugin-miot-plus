@@ -1,8 +1,8 @@
 // MIoT 智能音箱插件 - 歌单播放 Handler
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/handlers/playlist_handler.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/handlers/playlist_handler.go
 
-import { jsonResponse, parseQuery } from '@mimusic/plugin-sdk';
-import type { Router, HTTPRequest } from '@mimusic/plugin-sdk';
+import { jsonResponse, parseQuery } from '@songloft/plugin-sdk';
+import type { Router, HTTPRequest } from '@songloft/plugin-sdk';
 import { PlaylistManagerMap } from '../player/manager';
 import { MinaService } from '../service/service';
 import { ConfigManager } from '../config/manager';
@@ -66,7 +66,7 @@ export function registerPlaylistHandlers(
         // 回环地址时返回空列表（附带提示信息），而不是 400 错误
         return jsonResponse({ success: true, data: [], message: '服务器地址为本地回环地址（localhost/127.0.0.1），MIoT 智能音箱无法访问。请在「设置」中修改为局域网 IP 地址。' });
       }
-      const playlists = await mimusic.playlists.list();
+      const playlists = await songloft.playlists.list();
       return jsonResponse({ success: true, data: playlists });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
@@ -80,7 +80,7 @@ export function registerPlaylistHandlers(
       if (!playlistId || isNaN(playlistId)) {
         return jsonResponse({ success: false, error: 'invalid playlist id' });
       }
-      const songs = await mimusic.playlists.getSongs(playlistId, { limit: 100000 });
+      const songs = await songloft.playlists.getSongs(playlistId, { limit: 100000 });
       return jsonResponse({ success: true, data: songs });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });

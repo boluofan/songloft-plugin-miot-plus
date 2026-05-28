@@ -8,10 +8,10 @@ importers:
 
   .:
     devDependencies:
-      '@mimusic/plugin-builder':
+      '@songloft/plugin-builder':
         specifier: ^0.8.1
         version: 0.8.1
-      '@mimusic/plugin-sdk':
+      '@songloft/plugin-sdk':
         specifier: ^0.8.1
         version: 0.8.1
       typescript:
@@ -180,32 +180,32 @@ packages:
     resolution: {integrity: sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg==}
     engines: {node: '>=18'}
 
-  '@mimusic/jsc-darwin-arm64@0.8.1':
+  '@songloft/jsc-darwin-arm64@0.8.1':
     resolution: {integrity: sha512-vdyczLyhMbu0S86ri6mFhD8n9mU9DuUC5UOBtCn2MwCWleXwhaTaklvGyZbvM5OFESTiHpjPruPBYwGLFgBJbw==}
 
-  '@mimusic/jsc-darwin-x64@0.8.1':
+  '@songloft/jsc-darwin-x64@0.8.1':
     resolution: {integrity: sha512-OyAONZOMz0mqIdtJQ5zK8dkovam4TT7O07q9I3+fyaitrDJHj6rN35UdNHKQvmFmxj9/eSl/bSda7/gT07F2+Q==}
 
-  '@mimusic/jsc-linux-arm64@0.8.1':
+  '@songloft/jsc-linux-arm64@0.8.1':
     resolution: {integrity: sha512-d4hx22D5g0mhmqRz02ewxXsoUP4EFPB8xMvA0PFmHBk7SAsOaiyHQTbIv2r9kAE3Wg8wIHFBsiEI2bbV+J1jEA==}
 
-  '@mimusic/jsc-linux-x64@0.8.1':
+  '@songloft/jsc-linux-x64@0.8.1':
     resolution: {integrity: sha512-otdEjTQic3B4dEojumBTA2Lj9l7zGHbqTdxxvFLmL+OcnQRYaVTyyLvwJNrI/rOkD2nh1iky4N7c0mXYkyeT6w==}
 
-  '@mimusic/jsc-win32-arm64@0.8.1':
+  '@songloft/jsc-win32-arm64@0.8.1':
     resolution: {integrity: sha512-cLMaWC0FB2pPJjbkI6ws1+141fSpzhxvB/EvvUW4VrHIgS6rUNDtISA4W+8NO5+madTpvHhKFqugGre7vlHbxg==}
 
-  '@mimusic/jsc-win32-x64@0.8.1':
+  '@songloft/jsc-win32-x64@0.8.1':
     resolution: {integrity: sha512-nesrMkHyPpjT+0K/8AgfMCj40KwaUOag1gL1PIAfKFGFaRJcN3z0q3lgpORuv+4mXachJXbhdGxOL/rt3BC8qA==}
 
-  '@mimusic/jsc@0.8.1':
+  '@songloft/jsc@0.8.1':
     resolution: {integrity: sha512-mW3m4eo8kcpz+AmB3cwVD75ELSQqShO8dDw1yfd2sU4sk39JEPqf27wLCM7oI/B/IsULT67Y1ZP4flmQEOHJ5g==}
 
-  '@mimusic/plugin-builder@0.8.1':
+  '@songloft/plugin-builder@0.8.1':
     resolution: {integrity: sha512-C8IlZ1D7fPBoykTNo1LTLeDLF39K2DSBgJbU7O0AmS+/iTKIoxsIJGp9ynyb6OLVAUQ0nHxr9nyA3vaabn9Msw==}
     hasBin: true
 
-  '@mimusic/plugin-sdk@0.8.1':
+  '@songloft/plugin-sdk@0.8.1':
     resolution: {integrity: sha512-YwLX7c8uRq+bOA9Prl1rHOH6qxQCR9TaudEGAsiGMZ6uF1ncYCPJaH3f3NloOSdt59OXPVGW9UJqRZ9t7pQNLA==}
 
   balanced-match@4.0.4:
@@ -408,41 +408,41 @@ snapshots:
 
   '@isaacs/cliui@9.0.0': {}
 
-  '@mimusic/jsc-darwin-arm64@0.8.1':
+  '@songloft/jsc-darwin-arm64@0.8.1':
     optional: true
 
-  '@mimusic/jsc-darwin-x64@0.8.1':
+  '@songloft/jsc-darwin-x64@0.8.1':
     optional: true
 
-  '@mimusic/jsc-linux-arm64@0.8.1':
+  '@songloft/jsc-linux-arm64@0.8.1':
     optional: true
 
-  '@mimusic/jsc-linux-x64@0.8.1':
+  '@songloft/jsc-linux-x64@0.8.1':
     optional: true
 
-  '@mimusic/jsc-win32-arm64@0.8.1':
+  '@songloft/jsc-win32-arm64@0.8.1':
     optional: true
 
-  '@mimusic/jsc-win32-x64@0.8.1':
+  '@songloft/jsc-win32-x64@0.8.1':
     optional: true
 
-  '@mimusic/jsc@0.8.1':
+  '@songloft/jsc@0.8.1':
     optionalDependencies:
-      '@mimusic/jsc-darwin-arm64': 0.8.1
-      '@mimusic/jsc-darwin-x64': 0.8.1
-      '@mimusic/jsc-linux-arm64': 0.8.1
-      '@mimusic/jsc-linux-x64': 0.8.1
-      '@mimusic/jsc-win32-arm64': 0.8.1
-      '@mimusic/jsc-win32-x64': 0.8.1
+      '@songloft/jsc-darwin-arm64': 0.8.1
+      '@songloft/jsc-darwin-x64': 0.8.1
+      '@songloft/jsc-linux-arm64': 0.8.1
+      '@songloft/jsc-linux-x64': 0.8.1
+      '@songloft/jsc-win32-arm64': 0.8.1
+      '@songloft/jsc-win32-x64': 0.8.1
 
-  '@mimusic/plugin-builder@0.8.1':
+  '@songloft/plugin-builder@0.8.1':
     dependencies:
-      '@mimusic/jsc': 0.8.1
+      '@songloft/jsc': 0.8.1
       esbuild: 0.25.12
       glob: 11.1.0
       jszip: 3.10.1
 
-  '@mimusic/plugin-sdk@0.8.1': {}
+  '@songloft/plugin-sdk@0.8.1': {}
 
   balanced-match@4.0.4: {}
 

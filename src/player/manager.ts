@@ -1,8 +1,8 @@
 // MIoT 智能音箱插件 - 歌单播放管理器
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/player/playlist_manager.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/player/playlist_manager.go
 // 管理播放状态机、播放模式切换、自动切歌
 
-/// <reference types="@mimusic/plugin-sdk" />
+/// <reference types="@songloft/plugin-sdk" />
 
 import { ConfigManager } from '../config/manager';
 import { MinaService } from '../service/service';
@@ -89,12 +89,12 @@ export class PlaylistManager {
     // 加载歌单歌曲
     const loaded = await this.loadPlaylistSongs(playlistId);
     if (!loaded) {
-      mimusic.log.error('[PlaylistManager] Failed to load playlist songs: ' + playlistId);
+      songloft.log.error('[PlaylistManager] Failed to load playlist songs: ' + playlistId);
       return false;
     }
 
     if (this.songs.length === 0) {
-      mimusic.log.warn('[PlaylistManager] Playlist is empty: ' + playlistId);
+      songloft.log.warn('[PlaylistManager] Playlist is empty: ' + playlistId);
       return false;
     }
 
@@ -111,14 +111,14 @@ export class PlaylistManager {
     // 开始播放当前歌曲
     const ok = await this.playCurrent();
     if (!ok) {
-      mimusic.log.error('[PlaylistManager] Failed to play current song');
+      songloft.log.error('[PlaylistManager] Failed to play current song');
       return false;
     }
 
     // 持久化播放状态到设备配置
     await this.persistState();
 
-    mimusic.log.info(`[PlaylistManager] Playlist started id=${playlistId} index=${this.currentIndex} mode=${this.playMode} total=${this.songs.length}`);
+    songloft.log.info(`[PlaylistManager] Playlist started id=${playlistId} index=${this.currentIndex} mode=${this.playMode} total=${this.songs.length}`);
     return true;
   }
 
@@ -135,7 +135,7 @@ export class PlaylistManager {
       await this.minaService.pausePlay(this.accountId, this.deviceId);
     }
 
-    mimusic.log.info('[PlaylistManager] Playback stopped');
+    songloft.log.info('[PlaylistManager] Playback stopped');
   }
 
   /**
@@ -144,13 +144,13 @@ export class PlaylistManager {
    */
   async next(): Promise<boolean> {
     if (this.songs.length === 0) {
-      mimusic.log.warn('[PlaylistManager] No playlist loaded for next');
+      songloft.log.warn('[PlaylistManager] No playlist loaded for next');
       return false;
     }
 
     const nextIdx = this.getNextIndex();
     if (nextIdx < 0) {
-      mimusic.log.info('[PlaylistManager] No next song, stopping');
+      songloft.log.info('[PlaylistManager] No next song, stopping');
       await this.stop();
       return false;
     }
@@ -169,13 +169,13 @@ export class PlaylistManager {
    */
   async previous(): Promise<boolean> {
     if (this.songs.length === 0) {
-      mimusic.log.warn('[PlaylistManager] No playlist loaded for previous');
+      songloft.log.warn('[PlaylistManager] No playlist loaded for previous');
       return false;
     }
 
     const prevIdx = this.getPreviousIndex();
     if (prevIdx < 0) {
-      mimusic.log.info('[PlaylistManager] No previous song');
+      songloft.log.info('[PlaylistManager] No previous song');
       return false;
     }
 
@@ -204,10 +204,10 @@ export class PlaylistManager {
         play_mode: mode,
       });
     } catch (e) {
-      mimusic.log.warn('[PlaylistManager] Failed to save play mode: ' + String(e));
+      songloft.log.warn('[PlaylistManager] Failed to save play mode: ' + String(e));
     }
 
-    mimusic.log.info('[PlaylistManager] Play mode set to ' + mode);
+    songloft.log.info('[PlaylistManager] Play mode set to ' + mode);
   }
 
   /**
@@ -300,18 +300,18 @@ export class PlaylistManager {
    */
   private async loadPlaylistSongs(playlistId: number): Promise<boolean> {
     try {
-      // 使用 mimusic.playlists.getSongs 桥接调用（与 Go WASM 版本的 hostFunctions.CallRouter 等价）
+      // 使用 songloft.playlists.getSongs 桥接调用（与 Go WASM 版本的 hostFunctions.CallRouter 等价）
       // 这样不需要 hostBaseUrl 和 pluginToken，直接通过内部桥接访问数据库
-      const songs = await mimusic.playlists.getSongs(playlistId, { limit: 100000 });
+      const songs = await songloft.playlists.getSongs(playlistId, { limit: 100000 });
       if (!songs || !Array.isArray(songs)) {
-        mimusic.log.error('[PlaylistManager] Bridge returned invalid songs data for playlist: ' + playlistId);
+        songloft.log.error('[PlaylistManager] Bridge returned invalid songs data for playlist: ' + playlistId);
         return false;
       }
       this.songs = songs as any;
       this.totalSongs = songs.length;
       return songs.length > 0;
     } catch (e) {
-      mimusic.log.error('[PlaylistManager] Failed to load playlist songs: ' + String(e));
+      songloft.log.error('[PlaylistManager] Failed to load playlist songs: ' + String(e));
       return false;
     }
   }
@@ -321,7 +321,7 @@ export class PlaylistManager {
    */
   private async playCurrent(): Promise<boolean> {
     if (this.currentIndex < 0 || this.currentIndex >= this.songs.length) {
-      mimusic.log.error('[PlaylistManager] Invalid current index: ' + this.currentIndex);
+      songloft.log.error('[PlaylistManager] Invalid current index: ' + this.currentIndex);
       return false;
     }
 
@@ -330,18 +330,18 @@ export class PlaylistManager {
     // 检查服务器地址
     const serverHost = getHostBaseUrl();
     if (!serverHost) {
-      mimusic.log.error('[PlaylistManager] Server host not configured');
+      songloft.log.error('[PlaylistManager] Server host not configured');
       return false;
     }
 
     // 构造播放URL
     const songURL = await URLBuilder.buildSongURL(song);
     if (!songURL) {
-      mimusic.log.error('[PlaylistManager] Failed to build song URL: ' + song.title);
+      songloft.log.error('[PlaylistManager] Failed to build song URL: ' + song.title);
       return false;
     }
 
-    mimusic.log.info(`[PlaylistManager] Playing song index=${this.currentIndex} title=${song.title} artist=${song.artist} duration=${song.duration}`);
+    songloft.log.info(`[PlaylistManager] Playing song index=${this.currentIndex} title=${song.title} artist=${song.artist} duration=${song.duration}`);
 
     // 停止旧定时器
     this.stopCheckTimer();
@@ -349,7 +349,7 @@ export class PlaylistManager {
     // 调用小爱音箱播放
     const ok = await this.minaService.playURL(this.accountId, this.deviceId, songURL);
     if (!ok) {
-      mimusic.log.error('[PlaylistManager] Failed to play URL on device');
+      songloft.log.error('[PlaylistManager] Failed to play URL on device');
       return false;
     }
 
@@ -360,7 +360,7 @@ export class PlaylistManager {
     if (song.duration > 0) {
       this.startCheckTimer(song.duration);
     } else {
-      mimusic.log.warn('[PlaylistManager] Song duration invalid, no auto-next timer: ' + song.duration);
+      songloft.log.warn('[PlaylistManager] Song duration invalid, no auto-next timer: ' + song.duration);
     }
 
     return true;
@@ -468,11 +468,11 @@ export class PlaylistManager {
     this.stopCheckTimer();
 
     const delayMs = Math.floor(durationSec * 1000);
-    mimusic.log.info('[PlaylistManager] Timer registered delayMs=' + delayMs);
+    songloft.log.info('[PlaylistManager] Timer registered delayMs=' + delayMs);
 
     this.checkTimer = setTimeout(() => {
       this.onSongFinished().catch(e => {
-        mimusic.log.error('[PlaylistManager] onSongFinished error: ' + String(e));
+        songloft.log.error('[PlaylistManager] onSongFinished error: ' + String(e));
       });
     }, delayMs);
   }
@@ -492,13 +492,13 @@ export class PlaylistManager {
    */
   private async onSongFinished(): Promise<void> {
     if (this.state !== 'playing') {
-      mimusic.log.info('[PlaylistManager] Not playing, skip auto-next');
+      songloft.log.info('[PlaylistManager] Not playing, skip auto-next');
       return;
     }
 
     const nextIdx = this.getNextIndex();
     if (nextIdx < 0) {
-      mimusic.log.info('[PlaylistManager] No next song, playback complete');
+      songloft.log.info('[PlaylistManager] No next song, playback complete');
       this.state = 'stopped';
       this.playStartTimeMs = 0;
       return;
@@ -509,7 +509,7 @@ export class PlaylistManager {
     if (ok) {
       await this.persistState();
     } else {
-      mimusic.log.error('[PlaylistManager] Auto-next failed, stopping');
+      songloft.log.error('[PlaylistManager] Auto-next failed, stopping');
       this.state = 'stopped';
       this.playStartTimeMs = 0;
     }
@@ -526,7 +526,7 @@ export class PlaylistManager {
         play_mode: this.playMode,
       });
     } catch (e) {
-      mimusic.log.warn('[PlaylistManager] Failed to persist state: ' + String(e));
+      songloft.log.warn('[PlaylistManager] Failed to persist state: ' + String(e));
     }
   }
 }
@@ -622,25 +622,25 @@ export class PlaylistManagerMap {
         return;
       }
 
-      // 使用 mimusic.playlists.getSongs 桥接调用加载歌单歌曲
+      // 使用 songloft.playlists.getSongs 桥接调用加载歌单歌曲
       let songs: Song[] = [];
       try {
-        const result = await mimusic.playlists.getSongs(devCfg.playlist_id, { limit: 100000 });
+        const result = await songloft.playlists.getSongs(devCfg.playlist_id, { limit: 100000 });
         if (result && Array.isArray(result)) {
           songs = result as any;
         }
       } catch (e) {
-        mimusic.log.warn('[PlaylistManagerMap] Failed to load songs via bridge: ' + String(e));
+        songloft.log.warn('[PlaylistManagerMap] Failed to load songs via bridge: ' + String(e));
       }
 
       if (songs.length > 0) {
         const startIndex = devCfg.current_song_index || 0;
         const playMode = (devCfg.play_mode || 'order') as PlayMode;
         manager.initWithSongs(songs, startIndex, playMode, devCfg.playlist_id);
-        mimusic.log.info(`[PlaylistManagerMap] Restored playlist from config playlistId=${devCfg.playlist_id} index=${startIndex} mode=${playMode}`);
+        songloft.log.info(`[PlaylistManagerMap] Restored playlist from config playlistId=${devCfg.playlist_id} index=${startIndex} mode=${playMode}`);
       }
     } catch (e) {
-      mimusic.log.warn('[PlaylistManagerMap] Failed to restore playlist from config: ' + String(e));
+      songloft.log.warn('[PlaylistManagerMap] Failed to restore playlist from config: ' + String(e));
     }
   }
 }

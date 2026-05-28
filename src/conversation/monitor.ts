@@ -1,8 +1,8 @@
 // MIoT 智能音箱插件 - 对话监听器
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/conversation/monitor.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/conversation/monitor.go
 // 定时轮询设备对话记录，支持回调通知和 Webhook 推送
 
-/// <reference types="@mimusic/plugin-sdk" />
+/// <reference types="@songloft/plugin-sdk" />
 
 import { AccountManager } from '../account/manager';
 import { ConfigManager } from '../config/manager';
@@ -84,7 +84,7 @@ export class ConversationMonitor {
   start(): void {
     // 已启动且定时器正在运行，直接返回
     if (this.enabled && this.pollTimer !== null) {
-      mimusic.log.info('[ConversationMonitor] Already running, skip start');
+      songloft.log.info('[ConversationMonitor] Already running, skip start');
       return;
     }
 
@@ -102,15 +102,15 @@ export class ConversationMonitor {
       for (const dm of this.devices.values()) {
         dm.isRunning = true;
       }
-      mimusic.log.info(`[ConversationMonitor] Started, devices=${this.devices.size} callbacks=${this.callbacks.size}`);
+      songloft.log.info(`[ConversationMonitor] Started, devices=${this.devices.size} callbacks=${this.callbacks.size}`);
     }).catch(e => {
-      mimusic.log.error('[ConversationMonitor] refreshDevices error: ' + String(e));
+      songloft.log.error('[ConversationMonitor] refreshDevices error: ' + String(e));
     });
 
     // 启动定时轮询
     this.pollTimer = setInterval(() => {
       this.pollAll().catch(e => {
-        mimusic.log.error('[ConversationMonitor] pollAll error: ' + String(e));
+        songloft.log.error('[ConversationMonitor] pollAll error: ' + String(e));
       });
     }, this.pollInterval);
   }
@@ -135,7 +135,7 @@ export class ConversationMonitor {
       dm.isRunning = false;
     }
 
-    mimusic.log.info(`[ConversationMonitor] Stopped`);
+    songloft.log.info(`[ConversationMonitor] Stopped`);
   }
 
   /**
@@ -153,7 +153,7 @@ export class ConversationMonitor {
    */
   registerCallback(name: string, cb: ConversationCallback): void {
     this.callbacks.set(name, cb);
-    mimusic.log.info(`[ConversationMonitor] Callback registered: ${name}`);
+    songloft.log.info(`[ConversationMonitor] Callback registered: ${name}`);
   }
 
   /**
@@ -161,7 +161,7 @@ export class ConversationMonitor {
    */
   unregisterCallback(name: string): void {
     this.callbacks.delete(name);
-    mimusic.log.info(`[ConversationMonitor] Callback unregistered: ${name}`);
+    songloft.log.info(`[ConversationMonitor] Callback unregistered: ${name}`);
   }
 
   /**
@@ -182,7 +182,7 @@ export class ConversationMonitor {
       result = result.slice(result.length - limit);
     }
 
-    mimusic.log.info(`[ConversationMonitor] getMessages total_stored=${this.messages.length} returning=${result.length} (limit=${limit} sinceTs=${sinceTimestampMs})`);
+    songloft.log.info(`[ConversationMonitor] getMessages total_stored=${this.messages.length} returning=${result.length} (limit=${limit} sinceTs=${sinceTimestampMs})`);
     return result;
   }
 
@@ -250,7 +250,7 @@ export class ConversationMonitor {
     for (const key of this.devices.keys()) {
       if (!managedKeys.has(key)) {
         this.devices.delete(key);
-        mimusic.log.info(`[ConversationMonitor] Device removed from monitoring: ${key}`);
+        songloft.log.info(`[ConversationMonitor] Device removed from monitoring: ${key}`);
       }
     }
 
@@ -265,7 +265,7 @@ export class ConversationMonitor {
         lastTimestampMs: Date.now(),
         isRunning: true,
       });
-      mimusic.log.info(`[ConversationMonitor] Device added to monitoring: ${dev.deviceName} (${key})`);
+      songloft.log.info(`[ConversationMonitor] Device added to monitoring: ${dev.deviceName} (${key})`);
     }
   }
 
@@ -299,7 +299,7 @@ export class ConversationMonitor {
     try {
       askMessages = await client.getLatestAskFromXiaoai(dm.deviceId, dm.hardware, 5);
     } catch (e) {
-      mimusic.log.warn(`[ConversationMonitor] Failed to get conversations: ${dm.deviceId} ${String(e)}`);
+      songloft.log.warn(`[ConversationMonitor] Failed to get conversations: ${dm.deviceId} ${String(e)}`);
       return;
     }
 
@@ -310,9 +310,9 @@ export class ConversationMonitor {
         const q = m.response?.answer?.[0]?.question ?? '?';
         return `[ts=${m.timestamp_ms} q="${q.substring(0, 50)}"]`;
       }).join(', ');
-      mimusic.log.info(`[ConversationMonitor] pollDevice device=${dm.deviceId} returned ${msgCount} messages: ${summary}`);
+      songloft.log.info(`[ConversationMonitor] pollDevice device=${dm.deviceId} returned ${msgCount} messages: ${summary}`);
     } else {
-      mimusic.log.info(`[ConversationMonitor] pollDevice device=${dm.deviceId} returned 0 messages`);
+      songloft.log.info(`[ConversationMonitor] pollDevice device=${dm.deviceId} returned 0 messages`);
     }
 
     if (!askMessages || askMessages.length === 0) {
@@ -340,7 +340,7 @@ export class ConversationMonitor {
     }
 
     // 打印过滤结果
-    mimusic.log.info(`[ConversationMonitor] pollDevice device=${dm.deviceId} after filter: ${newMessages.length} new (lastTimestampMs=${dm.lastTimestampMs})`);
+    songloft.log.info(`[ConversationMonitor] pollDevice device=${dm.deviceId} after filter: ${newMessages.length} new (lastTimestampMs=${dm.lastTimestampMs})`);
 
     if (newMessages.length === 0) {
       return;
@@ -353,11 +353,11 @@ export class ConversationMonitor {
     for (const msg of newMessages) {
       const q = msg.message?.response?.answer?.[0]?.question ?? '?';
       const a = msg.message?.response?.answer?.[0]?.content ?? '?';
-      mimusic.log.info(`[ConversationMonitor] addMessage ts=${msg.message.timestamp_ms} q="${q.substring(0, 80)}" a="${a.substring(0, 80)}"`);
+      songloft.log.info(`[ConversationMonitor] addMessage ts=${msg.message.timestamp_ms} q="${q.substring(0, 80)}" a="${a.substring(0, 80)}"`);
       this.addMessage(msg);
     }
 
-    mimusic.log.info(`[ConversationMonitor] New messages account=${dm.accountId} device=${dm.deviceId} count=${newMessages.length}`);
+    songloft.log.info(`[ConversationMonitor] New messages account=${dm.accountId} device=${dm.deviceId} count=${newMessages.length}`);
 
     // 触发所有内部回调
     await this.notifyCallbacks(newMessages);
@@ -387,7 +387,7 @@ export class ConversationMonitor {
           await cb(msg);
         }
       } catch (e) {
-        mimusic.log.error(`[ConversationMonitor] Callback error name=${name}: ${String(e)}`);
+        songloft.log.error(`[ConversationMonitor] Callback error name=${name}: ${String(e)}`);
       }
     }
   }
@@ -424,9 +424,9 @@ export class ConversationMonitor {
         headers: { 'Content-Type': 'application/json' },
         body: payload,
       });
-      mimusic.log.info(`[ConversationMonitor] Webhook sent id=${wh.id} url=${wh.url}`);
+      songloft.log.info(`[ConversationMonitor] Webhook sent id=${wh.id} url=${wh.url}`);
     } catch (e) {
-      mimusic.log.warn(`[ConversationMonitor] Webhook failed id=${wh.id} url=${wh.url}: ${String(e)}`);
+      songloft.log.warn(`[ConversationMonitor] Webhook failed id=${wh.id} url=${wh.url}: ${String(e)}`);
     }
   }
 

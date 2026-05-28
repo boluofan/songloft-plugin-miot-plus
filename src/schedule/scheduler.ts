@@ -1,8 +1,8 @@
 // MIoT 智能音箱插件 - 定时任务调度器
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/schedule/scheduler.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/schedule/scheduler.go
 // 实现 30s tick 循环，分钟级去重，weekly/monthly 调度匹配
 
-/// <reference types="@mimusic/plugin-sdk" />
+/// <reference types="@songloft/plugin-sdk" />
 
 import { ConfigManager } from '../config/manager';
 import type { ScheduledTask, TaskSchedule, TaskLog } from '../types';
@@ -38,7 +38,7 @@ export class Scheduler {
    */
   start(): void {
     if (this.enabled) {
-      mimusic.log.info('[Scheduler] 调度器已在运行中，跳过启动');
+      songloft.log.info('[Scheduler] 调度器已在运行中，跳过启动');
       return;
     }
     this.enabled = true;
@@ -46,16 +46,16 @@ export class Scheduler {
     // 启动 30s 周期 tick
     this.tickTimer = setInterval(() => {
       this.tick().catch(e => {
-        mimusic.log.error('[Scheduler] tick error: ' + String(e));
+        songloft.log.error('[Scheduler] tick error: ' + String(e));
       });
     }, TICK_INTERVAL_MS);
 
     // 立即执行一次
     this.tick().catch(e => {
-      mimusic.log.error('[Scheduler] initial tick error: ' + String(e));
+      songloft.log.error('[Scheduler] initial tick error: ' + String(e));
     });
 
-    mimusic.log.info('[Scheduler] 定时任务调度器已启动');
+    songloft.log.info('[Scheduler] 定时任务调度器已启动');
   }
 
   /**
@@ -72,7 +72,7 @@ export class Scheduler {
       this.tickTimer = null;
     }
 
-    mimusic.log.info('[Scheduler] 定时任务调度器已停止');
+    songloft.log.info('[Scheduler] 定时任务调度器已停止');
   }
 
   /**
@@ -129,7 +129,7 @@ export class Scheduler {
         continue;
       }
 
-      mimusic.log.info(
+      songloft.log.info(
         `[Scheduler] 定时任务触发 task_id=${task.id} name=${task.name} action=${task.action} time=${timeStr}`
       );
 
@@ -151,7 +151,7 @@ export class Scheduler {
       case 'monthly':
         return this.matchMonthly(schedule, monthday);
       default:
-        mimusic.log.warn('[Scheduler] 未知的调度类型: ' + schedule.type);
+        songloft.log.warn('[Scheduler] 未知的调度类型: ' + schedule.type);
         return false;
     }
   }

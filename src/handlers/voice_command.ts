@@ -1,8 +1,8 @@
 // MIoT 智能音箱插件 - 语音口令 Handler
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/handlers/voice_command_handler.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/handlers/voice_command_handler.go
 
-import { jsonResponse } from '@mimusic/plugin-sdk';
-import type { Router, HTTPRequest } from '@mimusic/plugin-sdk';
+import { jsonResponse } from '@songloft/plugin-sdk';
+import type { Router, HTTPRequest } from '@songloft/plugin-sdk';
 import { ConfigManager } from '../config/manager';
 
 /** 解析请求体（兼容 Uint8Array 和 string） */

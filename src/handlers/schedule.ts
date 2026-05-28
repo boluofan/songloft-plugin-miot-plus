@@ -1,8 +1,8 @@
 // MIoT 智能音箱插件 - 定时任务 Handler
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/handlers/schedule_handler.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/handlers/schedule_handler.go
 
-import { jsonResponse, parseQuery } from '@mimusic/plugin-sdk';
-import type { Router, HTTPRequest } from '@mimusic/plugin-sdk';
+import { jsonResponse, parseQuery } from '@songloft/plugin-sdk';
+import type { Router, HTTPRequest } from '@songloft/plugin-sdk';
 import { Scheduler } from '../schedule/scheduler';
 import { ConfigManager } from '../config/manager';
 import type { ScheduledTask, TaskAction, TaskSchedule, TaskTarget, TaskParams } from '../types';

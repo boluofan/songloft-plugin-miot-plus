@@ -1,5 +1,5 @@
 // MIoT 智能音箱插件 - Mina API 中间数据模型
-// 翻译自 Go 源码: plugins/mimusic-plugin-xiaomi/pkg/mina/models.go
+// 翻译自 Go 源码: plugins/songloft-plugin-xiaomi/pkg/mina/models.go
 // 仅包含 types.ts 中未覆盖的认证流程中间类型
 
 import type { LoginStateType } from './constants';

@@ -1,7 +1,7 @@
 // MIoT 智能音箱插件 - 配置管理器
-// 基于 mimusic.storage API 实现配置持久化（异步桥接）
+// 基于 songloft.storage API 实现配置持久化（异步桥接）
 
-/// <reference types="@mimusic/plugin-sdk" />
+/// <reference types="@songloft/plugin-sdk" />
 
 import type {
   PluginConfig,
@@ -38,7 +38,7 @@ function defaultPluginConfig(): PluginConfig {
 
 /**
  * 配置管理器
- * 使用 mimusic.storage API（异步）实现分键持久化存储
+ * 使用 songloft.storage API（异步）实现分键持久化存储
  */
 export class ConfigManager {
 
@@ -46,7 +46,7 @@ export class ConfigManager {
 
   /** 从storage读取JSON数据，不存在则返回默认值 */
   private async load<T>(key: string, defaultValue: T): Promise<T> {
-    const raw = await mimusic.storage.get(key);
+    const raw = await songloft.storage.get(key);
     if (raw === null || raw === undefined || raw === '') {
       return defaultValue;
     }
@@ -59,7 +59,7 @@ export class ConfigManager {
 
   /** 将JSON数据写入storage */
   private async save<T>(key: string, value: T): Promise<void> {
-    await mimusic.storage.set(key, JSON.stringify(value));
+    await songloft.storage.set(key, JSON.stringify(value));
   }
 
   // ===== 全局配置 =====
