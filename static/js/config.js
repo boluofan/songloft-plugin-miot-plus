@@ -60,6 +60,13 @@ export function loadConfig() {
             }
             updateVoiceCommandStatus(voiceEnabled);
 
+            // 音频格式开关
+            const forceMp3 = !!data.data.force_mp3;
+            const forceMp3Switch = document.getElementById('forceMp3Switch');
+            if (forceMp3Switch) {
+                forceMp3Switch.checked = forceMp3;
+            }
+
             // 时区
             const timezoneSelect = document.getElementById('timezoneSelect');
             if (timezoneSelect && data.data.timezone) {
@@ -132,6 +139,41 @@ function updateServerHostWarning(status) {
     } else {
         warningEl.style.display = 'none';
     }
+}
+
+// ========== 音频格式 ==========
+
+/**
+ * 初始化音频格式开关 UI 事件
+ */
+export function initForceMp3UI() {
+    const switchEl = document.getElementById('forceMp3Switch');
+    if (switchEl) {
+        switchEl.addEventListener('change', function() {
+            toggleForceMp3(this.checked);
+        });
+    }
+}
+
+/**
+ * 切换强制 MP3 开关
+ */
+function toggleForceMp3(enabled) {
+    apiPost('/config', { force_mp3: enabled })
+        .then(data => {
+            if (data.success) {
+                showSnackbar(enabled ? '已开启统一转为 MP3' : '已关闭统一转为 MP3', 'success');
+            } else {
+                showSnackbar('操作失败：' + (data.error || '未知错误'), 'error');
+                const switchEl = document.getElementById('forceMp3Switch');
+                if (switchEl) switchEl.checked = !enabled;
+            }
+        })
+        .catch(error => {
+            showSnackbar('操作失败：' + error.message, 'error');
+            const switchEl = document.getElementById('forceMp3Switch');
+            if (switchEl) switchEl.checked = !enabled;
+        });
 }
 
 // ========== 对话监听功能 ==========

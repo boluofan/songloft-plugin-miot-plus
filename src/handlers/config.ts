@@ -69,6 +69,7 @@ export function registerConfigHandlers(
           voice_command_enabled: config.voice_command_enabled,
           scheduled_tasks_enabled: config.scheduled_tasks_enabled,
           timezone: config.timezone,
+          force_mp3: !!config.force_mp3,
           server_host_status: getServerHostStatus(config.server_host),
         },
       });
@@ -112,6 +113,11 @@ export function registerConfigHandlers(
         const enabled = !!body.voice_command_enabled;
         config.voice_command_enabled = enabled;
         voiceEngine.setEnabled(enabled);
+      }
+
+      // 更新 force_mp3
+      if (body.force_mp3 !== undefined) {
+        config.force_mp3 = !!body.force_mp3;
       }
 
       // 更新 scheduled_tasks_enabled（联动 Scheduler 启停）

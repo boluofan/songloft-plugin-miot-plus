@@ -33,6 +33,7 @@ function defaultPluginConfig(): PluginConfig {
     conversation_monitor_enabled: false,
     voice_command_enabled: false,
     scheduled_tasks_enabled: false,
+    force_mp3: false,
   };
 }
 

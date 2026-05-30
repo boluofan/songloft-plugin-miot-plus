@@ -334,8 +334,12 @@ export class PlaylistManager {
       return false;
     }
 
+    // 读取是否强制 MP3
+    const config = await this.configManager.getConfig();
+    const forceMp3 = !!config.force_mp3;
+
     // 构造播放URL
-    const songURL = await URLBuilder.buildSongURL(song);
+    const songURL = await URLBuilder.buildSongURL(song, { forceMp3 });
     if (!songURL) {
       songloft.log.error('[PlaylistManager] Failed to build song URL: ' + song.title);
       return false;

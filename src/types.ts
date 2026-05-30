@@ -88,6 +88,7 @@ export interface PluginConfig {
   conversation_monitor_enabled: boolean;
   voice_command_enabled: boolean;
   scheduled_tasks_enabled: boolean;
+  force_mp3: boolean;
 }
 
 // ===== 定时任务 =====

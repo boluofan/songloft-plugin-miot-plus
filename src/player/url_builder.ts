@@ -12,16 +12,15 @@ export class URLBuilder {
    *
    * 新架构(2026):后端 MarshalJSON 已统一处理 song.url 字段:
    * - 所有类型(local/remote/radio): /api/v1/songs/{id}/play
-   * 
+   *
    * @param song 歌曲对象（需要 id 和 url 字段）
+   * @param options.forceMp3 是否追加 format=mp3 强制服务端转码
    * @returns 播放 URL（相对路径会自动附加 access_token）
    */
   static async buildSongURL(song: {
     id?: number;
     url?: string;
-  }): Promise<string> {
-    // 后端 MarshalJSON 已将 song.url 统一为 /api/v1/songs/{id}/play
-    // 不再需要判断 type 或手动构建 Base62 编码路径
+  }, options?: { forceMp3?: boolean }): Promise<string> {
     const songUrl = song.url || '';
 
     if (!songUrl) {
@@ -37,6 +36,10 @@ export class URLBuilder {
     const serverHost = getHostBaseUrl();
     const accessToken = await songloft.plugin.getToken();
     const separator = songUrl.includes('?') ? '&' : '?';
-    return serverHost + songUrl + separator + 'access_token=' + accessToken;
+    let url = serverHost + songUrl + separator + 'access_token=' + accessToken;
+    if (options?.forceMp3) {
+      url += '&format=mp3';
+    }
+    return url;
   }
 }
