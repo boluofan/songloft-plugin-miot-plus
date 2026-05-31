@@ -9,6 +9,7 @@ import { Scheduler } from './schedule/scheduler';
 import { TaskExecutor } from './schedule/executor';
 import { ConversationMonitor } from './conversation/monitor';
 import { VoiceEngine } from './voicecmd/engine';
+import { AIAnalyzer } from './voicecmd/ai_analyzer';
 import { getDefaultVoiceCommands } from './voicecmd/engine';
 import { IndexingManager } from './indexing/manager';
 
@@ -60,7 +61,7 @@ async function onInit(): Promise<void> {
   const executor = new TaskExecutor(configManager, accountManager, minaService, playlistManagerMap, indexingManager);
   scheduler = new Scheduler(configManager, executor);
 
-  voiceEngine = new VoiceEngine(configManager, accountManager, minaService, playlistManagerMap, indexingManager);
+  voiceEngine = new VoiceEngine(configManager, accountManager, minaService, playlistManagerMap, indexingManager, new AIAnalyzer());
   conversationMonitor = new ConversationMonitor(accountManager, configManager);
 
   // 如果配置中没有语音口令配置，写入默认配置

@@ -2282,6 +2282,14 @@ body {
     color: var(--md-on-surface-variant);
 }
 
+/* AI Analysis Panel */
+.voice-cmd-ai-panel {
+    padding: 12px;
+    background: var(--md-surface-1);
+    border-radius: var(--md-radius-md);
+    border: 1px solid var(--md-outline-variant);
+}
+
 /* Command Group */
 .voice-cmd-group {
     padding: 12px 0;

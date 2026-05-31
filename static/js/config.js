@@ -75,6 +75,11 @@ export function loadConfig() {
 
             // 加载语音口令配置
             loadVoiceCommands();
+
+            // 加载 AI 配置
+            if (data.data.ai_config) {
+                loadAIConfig(data.data.ai_config);
+            }
         }
     }).catch(error => {
         console.error('加载配置失败:', error);
@@ -736,5 +741,126 @@ export function initTimezoneUI() {
                     showSnackbar('保存失败：' + error.message, 'error');
                 });
         });
+    }
+}
+
+// ========== AI 分析配置 ==========
+
+/**
+ * 初始化 AI 配置 UI 事件
+ */
+export function initAIConfigUI() {
+    // 开关事件
+    const switchEl = document.getElementById('aiAnalysisSwitch');
+    if (switchEl) {
+        switchEl.addEventListener('change', function() {
+            toggleAIAnalysis(this.checked);
+        });
+    }
+
+    // 保存按钮
+    const saveBtn = document.getElementById('saveAIConfigBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveAIConfig);
+    }
+}
+
+/**
+ * 加载 AI 配置到表单
+ */
+function loadAIConfig(aiConfig) {
+    const enabled = !!aiConfig.enabled;
+    const switchEl = document.getElementById('aiAnalysisSwitch');
+    if (switchEl) {
+        switchEl.checked = enabled;
+    }
+    updateAIConfigStatus(enabled);
+
+    const panel = document.getElementById('aiConfigPanel');
+    if (panel) {
+        panel.style.display = enabled ? 'block' : 'none';
+    }
+
+    const apiUrlInput = document.getElementById('aiApiUrl');
+    if (apiUrlInput && aiConfig.api_url) {
+        apiUrlInput.value = aiConfig.api_url;
+    }
+
+    const apiKeyInput = document.getElementById('aiApiKey');
+    if (apiKeyInput && aiConfig.api_key) {
+        apiKeyInput.value = aiConfig.api_key;
+    }
+
+    const modelInput = document.getElementById('aiModel');
+    if (modelInput && aiConfig.model) {
+        modelInput.value = aiConfig.model;
+    }
+
+    const timeoutInput = document.getElementById('aiTimeout');
+    if (timeoutInput && aiConfig.timeout) {
+        timeoutInput.value = aiConfig.timeout;
+    }
+}
+
+/**
+ * 切换 AI 分析开关
+ */
+function toggleAIAnalysis(enabled) {
+    apiPost('/config', { ai_config: { enabled } })
+        .then(data => {
+            if (data.success) {
+                showSnackbar(enabled ? 'AI 分析已开启' : 'AI 分析已关闭', 'success');
+                updateAIConfigStatus(enabled);
+                const panel = document.getElementById('aiConfigPanel');
+                if (panel) {
+                    panel.style.display = enabled ? 'block' : 'none';
+                }
+            } else {
+                showSnackbar('操作失败：' + (data.error || '未知错误'), 'error');
+                const switchEl = document.getElementById('aiAnalysisSwitch');
+                if (switchEl) switchEl.checked = !enabled;
+            }
+        })
+        .catch(error => {
+            showSnackbar('操作失败：' + error.message, 'error');
+            const switchEl = document.getElementById('aiAnalysisSwitch');
+            if (switchEl) switchEl.checked = !enabled;
+        });
+}
+
+/**
+ * 保存 AI 配置
+ */
+function saveAIConfig() {
+    const apiUrl = document.getElementById('aiApiUrl')?.value.trim() || '';
+    const apiKey = document.getElementById('aiApiKey')?.value.trim() || '';
+    const model = document.getElementById('aiModel')?.value.trim() || 'qwen-flash';
+    const timeout = parseInt(document.getElementById('aiTimeout')?.value, 10) || 6;
+
+    apiPost('/config', {
+        ai_config: {
+            api_url: apiUrl,
+            api_key: apiKey,
+            model: model,
+            timeout: timeout,
+        }
+    }).then(data => {
+        if (data.success) {
+            showSnackbar('AI 配置已保存', 'success');
+        } else {
+            showSnackbar('保存失败：' + (data.error || '未知错误'), 'error');
+        }
+    }).catch(error => {
+        showSnackbar('保存失败：' + error.message, 'error');
+    });
+}
+
+/**
+ * 更新 AI 配置状态文本
+ */
+function updateAIConfigStatus(enabled) {
+    const statusText = document.getElementById('aiAnalysisStatusText');
+    if (statusText) {
+        statusText.textContent = enabled ? '已开启' : '已关闭';
     }
 }

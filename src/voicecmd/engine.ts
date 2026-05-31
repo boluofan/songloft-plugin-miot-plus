@@ -9,7 +9,8 @@ import { AccountManager } from '../account/manager';
 import { MinaService } from '../service/service';
 import { PlaylistManagerMap } from '../player/manager';
 import { IndexingManager } from '../indexing/manager';
-import type { ConversationMessage, VoiceCommand, PlayMode } from '../types';
+import { AIAnalyzer } from './ai_analyzer';
+import type { ConversationMessage, VoiceCommand, PlayMode, AIAnalysisResult } from '../types';
 
 // ===== 类型定义 =====
 
@@ -66,6 +67,7 @@ export class VoiceEngine {
   private minaService: MinaService;
   private playlistManagerMap: PlaylistManagerMap;
   private indexingManager: IndexingManager;
+  private aiAnalyzer: AIAnalyzer;
   private enabled: boolean = false;
 
   constructor(
@@ -74,12 +76,14 @@ export class VoiceEngine {
     minaService: MinaService,
     playlistManagerMap: PlaylistManagerMap,
     indexingManager: IndexingManager,
+    aiAnalyzer?: AIAnalyzer,
   ) {
     this.configManager = configManager;
     this.accountManager = accountManager;
     this.minaService = minaService;
     this.playlistManagerMap = playlistManagerMap;
     this.indexingManager = indexingManager;
+    this.aiAnalyzer = aiAnalyzer || new AIAnalyzer();
   }
 
   // ===== 公开方法 =====
@@ -110,20 +114,42 @@ export class VoiceEngine {
       return;
     }
 
-    // 匹配口令
-    const result = await this.matchCommand(query);
-    if (!result) {
-      return;
-    }
-
-    songloft.log.info(`[VoiceEngine] Command matched type=${result.command.type} keyword="${result.keyword}" argument="${result.argument}" device=${msg.device_id}`);
-
     // 找到设备对应的 accountId
     const accountId = await this.findAccountForDevice(msg.device_id);
     if (!accountId) {
       songloft.log.warn(`[VoiceEngine] No account found for device: ${msg.device_id}`);
       return;
     }
+
+    // 尝试 AI 分析（如果启用）
+    const aiConfig = await this.configManager.getAIConfig();
+    if (aiConfig.enabled) {
+      songloft.log.info(`[VoiceEngine] [AI] Analyzing query="${query}"`);
+      const aiResult = await this.aiAnalyzer.analyze(query, aiConfig);
+      if (aiResult) {
+        songloft.log.info(`[VoiceEngine] [AI] Done: action=${aiResult.action} confidence=${aiResult.confidence} params=${JSON.stringify(aiResult.params)}`);
+        // AI 高置信度且识别到有效 action 才执行，否则用规则兜底
+        if (aiResult.confidence === 'high' && aiResult.action !== 'unknown') {
+          songloft.log.info(`[VoiceEngine] [AI] → Executing (high confidence, action=${aiResult.action})`);
+          await this.executeAIResult(aiResult, accountId, msg.device_id);
+          return;
+        } else {
+          songloft.log.info(`[VoiceEngine] [AI] → Falling back to rule matching (action=${aiResult.action}, confidence=${aiResult.confidence})`);
+        }
+      } else {
+        songloft.log.info(`[VoiceEngine] [AI] → Fallback to rule matching (analyze returned null)`);
+      }
+    }
+
+    // 规则匹配兜底
+    songloft.log.info(`[VoiceEngine] [Rule] Matching query="${query}"`);
+    const result = await this.matchCommand(query);
+    if (!result) {
+      songloft.log.info(`[VoiceEngine] [Rule] No match found, ignoring`);
+      return;
+    }
+
+    songloft.log.info(`[VoiceEngine] [Rule] → Matched: type=${result.command.type} keyword="${result.keyword}" argument="${result.argument}"`);
 
     // 执行口令
     await this.executeCommand(result, accountId, msg.device_id);
@@ -213,6 +239,62 @@ export class VoiceEngine {
         break;
       default:
         songloft.log.warn(`[VoiceEngine] Unknown command type: ${result.command.type}`);
+    }
+  }
+
+  /**
+   * 执行 AI 分析结果
+   */
+  private async executeAIResult(result: AIAnalysisResult, accountId: string, deviceId: string): Promise<void> {
+    songloft.log.info(`[VoiceEngine] [AI] Executing action=${result.action} params=${JSON.stringify(result.params)}`);
+    switch (result.action) {
+      case 'play_song': {
+        const name = result.params.name || '';
+        const artist = result.params.artist || '';
+        // 用 name + artist 组合作为搜索关键词
+        const searchTerm = name || artist;
+        if (!searchTerm) {
+          songloft.log.warn('[VoiceEngine] [AI] play_song: no name or artist to play');
+          return;
+        }
+        await this.executePlaySong(searchTerm, accountId, deviceId);
+        break;
+      }
+      case 'play_playlist': {
+        const playlist = result.params.playlist || '';
+        if (!playlist) {
+          songloft.log.warn('[VoiceEngine] [AI] play_playlist: no playlist name');
+          return;
+        }
+        await this.executePlayPlaylist(playlist, accountId, deviceId);
+        break;
+      }
+      case 'set_play_mode': {
+        const mode = result.params.mode || '';
+        if (!mode) {
+          songloft.log.warn('[VoiceEngine] [AI] set_play_mode: no mode');
+          return;
+        }
+        await this.executeSetPlayMode(accountId, deviceId, mode);
+        break;
+      }
+      case 'set_volume': {
+        const direction = result.params.direction || 'absolute';
+        const volume = result.params.volume;
+        await this.executeSetVolume(accountId, deviceId, direction, volume !== undefined ? String(volume) : '');
+        break;
+      }
+      case 'next':
+        await this.executeNext(accountId, deviceId);
+        break;
+      case 'previous':
+        await this.executePrevious(accountId, deviceId);
+        break;
+      case 'stop':
+        await this.executeStop(accountId, deviceId);
+        break;
+      default:
+        songloft.log.warn(`[VoiceEngine] [AI] Unknown action: ${result.action}`);
     }
   }
 

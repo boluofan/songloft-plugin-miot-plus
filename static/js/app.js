@@ -41,7 +41,7 @@ import {
     stopPlaylist
 } from './playback.js';
 import { initDialogs } from './modal.js';
-import { autoFillServerHost, saveConfig, loadConfig, initConversationUI, initVoiceCommandUI, initTimezoneUI, initForceMp3UI } from './config.js';
+import { autoFillServerHost, saveConfig, loadConfig, initConversationUI, initVoiceCommandUI, initTimezoneUI, initForceMp3UI, initAIConfigUI } from './config.js';
 import { addAccount, addAccountWithToken, deleteAccount, toggleDeviceManagement, loadAccounts, reLoginAccount } from './account.js';
 import { submitCaptcha, openVerifyUrl, submitVerifyCode, startQRCodeLogin } from './auth.js';
 import { Tracely } from './tracely-sdk.js';
@@ -444,6 +444,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初始化语音口令 UI
     initVoiceCommandUI();
+
+    // 初始化 AI 配置 UI
+    initAIConfigUI();
 
     // 初始化定时任务 UI
     initScheduleUI();

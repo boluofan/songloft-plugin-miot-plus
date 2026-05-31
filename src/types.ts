@@ -89,6 +89,7 @@ export interface PluginConfig {
   voice_command_enabled: boolean;
   scheduled_tasks_enabled: boolean;
   force_mp3: boolean;
+  ai_config: AIConfig;
 }
 
 // ===== 定时任务 =====
@@ -165,6 +166,36 @@ export interface VoiceCommand {
   keywords: string[];
   param?: string;          // 附加参数（播放模式值、音量方向等）
   enabled: boolean;
+}
+
+// ===== AI 口令分析 =====
+
+/** AI 分析配置 */
+export interface AIConfig {
+  enabled: boolean;
+  api_url: string;
+  api_key: string;
+  model: string;
+  timeout: number;         // 秒数，默认 6
+}
+
+/** AI 分析结果 */
+export interface AIAnalysisResult {
+  /** 匹配到的操作类型，与 VoiceCommand.type 对应 */
+  action: string;
+  /** 操作参数字段（根据 action 类型不同而不同） */
+  params: {
+    name?: string;
+    artist?: string;
+    playlist?: string;
+    mode?: string;
+    volume?: number;
+    direction?: string;
+  };
+  /** AI 置信度 */
+  confidence: 'high' | 'medium' | 'low';
+  /** 原始文本中的有效信息片段 */
+  rawText: string;
 }
 
 // ===== 对话记录 =====

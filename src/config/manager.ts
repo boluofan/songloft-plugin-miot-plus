@@ -11,6 +11,7 @@ import type {
   VoiceCommand,
   ScheduledTask,
   TaskLog,
+  AIConfig,
 } from '../types';
 
 // ===== 存储键常量 =====
@@ -20,6 +21,7 @@ const STORAGE_KEY_WEBHOOKS = 'webhooks';
 const STORAGE_KEY_VOICE_COMMANDS = 'voice_commands';
 const STORAGE_KEY_SCHEDULED_TASKS = 'scheduled_tasks';
 const STORAGE_KEY_SCHEDULE_LOGS = 'schedule_logs';
+const STORAGE_KEY_AI_CONFIG = 'ai_config';
 
 /** 日志最大条数（环形缓冲） */
 const MAX_SCHEDULE_LOGS = 200;
@@ -34,6 +36,18 @@ function defaultPluginConfig(): PluginConfig {
     voice_command_enabled: false,
     scheduled_tasks_enabled: false,
     force_mp3: false,
+    ai_config: defaultAIConfig(),
+  };
+}
+
+/** 默认 AI 配置 */
+function defaultAIConfig(): AIConfig {
+  return {
+    enabled: false,
+    api_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    api_key: '',
+    model: 'qwen-flash',
+    timeout: 6,
   };
 }
 
@@ -196,6 +210,18 @@ export class ConfigManager {
   /** 保存语音口令配置 */
   async saveVoiceCommands(commands: VoiceCommand[]): Promise<void> {
     await this.save(STORAGE_KEY_VOICE_COMMANDS, commands);
+  }
+
+  // ===== AI 配置 =====
+
+  /** 获取 AI 配置 */
+  async getAIConfig(): Promise<AIConfig> {
+    return this.load<AIConfig>(STORAGE_KEY_AI_CONFIG, defaultAIConfig());
+  }
+
+  /** 保存 AI 配置 */
+  async saveAIConfig(config: AIConfig): Promise<void> {
+    await this.save(STORAGE_KEY_AI_CONFIG, config);
   }
 
   // ===== 定时任务 =====

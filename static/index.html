@@ -321,13 +321,63 @@
                     <div id="voiceCommandList" style="margin-top:16px">
                         <div class="empty-state" style="padding:12px;font-size:13px">加载中...</div>
                     </div>
-
                     <!-- 底部操作 -->
                     <div class="toolbar" style="padding:12px 0 0;justify-content:flex-end">
                         <button class="btn-text" id="resetVoiceCommandsBtn">
                             <span class="material-symbols-outlined">restart_alt</span>
                             恢复默认
                         </button>
+                    </div>
+
+                    <!-- AI 分析配置 -->
+                    <div class="voice-cmd-ai-panel" id="aiAnalysisPanel" style="margin-top:16px">
+                        <div class="section-title">
+                            <span class="material-symbols-outlined" style="font-size:18px">psychology</span>
+                            AI 口令分析
+                        </div>
+                        <div style="margin-top:8px;padding:8px 12px;background:rgba(0,0,0,0.03);border-radius:6px;font-size:13px;color:#666;line-height:1.5">
+                            💡 启用后，系统将优先使用 AI 分析用户语音口令，上面的语音口令规则将不再生效。
+                        </div>
+                        <div class="switch-row" style="margin-top:8px">
+                            <div class="switch-row-label">
+                                <span class="switch-row-title">启用 AI 分析</span>
+                                <span class="switch-row-subtitle" id="aiAnalysisStatusText">已关闭</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="aiAnalysisSwitch">
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- AI 配置表单 -->
+                        <div id="aiConfigPanel" style="display:none;margin-top:12px">
+                            <div class="form-group">
+                                <label class="form-label">API 地址</label>
+                                <input type="text" class="text-field" id="aiApiUrl" placeholder="例如: https://dashscope.aliyuncs.com/compatible-mode/v1">
+                                <div style="margin-top:4px;font-size:12px;color:#999">兼容 OpenAI 格式的 API 地址，如阿里百炼</div>
+                            </div>
+                            <div class="form-group" style="margin-top:8px">
+                                <label class="form-label">API Key</label>
+                                <input type="password" class="text-field" id="aiApiKey" placeholder="API 密钥">
+                                <div style="margin-top:4px;font-size:12px;color:#999">用于身份验证的 API 密钥，请妥善保管</div>
+                            </div>
+                            <div class="form-group" style="margin-top:8px">
+                                <label class="form-label">模型</label>
+                                <input type="text" class="text-field" id="aiModel" placeholder="例如: qwen-flash">
+                                <div style="margin-top:4px;font-size:12px;color:#999">使用的 AI 模型名称，推荐使用快速响应的轻量级模型</div>
+                            </div>
+                            <div class="form-group" style="margin-top:8px">
+                                <label class="form-label">超时（秒）</label>
+                                <input type="number" class="text-field" id="aiTimeout" min="1" max="30" value="6" placeholder="6">
+                                <div style="margin-top:4px;font-size:12px;color:#999">AI 请求的最大等待时间，建议 3-10 秒，避免长时间等待</div>
+                            </div>
+                            <div class="toolbar" style="padding:8px 0 0;justify-content:flex-end">
+                                <button class="btn-filled" id="saveAIConfigBtn">
+                                    <span class="material-symbols-outlined">save</span>
+                                    保存
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

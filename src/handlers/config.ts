@@ -61,6 +61,7 @@ export function registerConfigHandlers(
   router.get('/config', async (req: HTTPRequest) => {
     try {
       const config = await configManager.getConfig();
+      const aiConfig = await configManager.getAIConfig();
       return jsonResponse({
         success: true,
         data: {
@@ -71,6 +72,7 @@ export function registerConfigHandlers(
           timezone: config.timezone,
           force_mp3: !!config.force_mp3,
           server_host_status: getServerHostStatus(config.server_host),
+          ai_config: aiConfig,
         },
       });
     } catch (e: any) {
@@ -118,6 +120,28 @@ export function registerConfigHandlers(
       // 更新 force_mp3
       if (body.force_mp3 !== undefined) {
         config.force_mp3 = !!body.force_mp3;
+      }
+
+      // 更新 ai_config
+      if (body.ai_config !== undefined) {
+        const aiConfig = await configManager.getAIConfig();
+        const newAI = body.ai_config as Record<string, unknown>;
+        if (typeof newAI.enabled === 'boolean') {
+          aiConfig.enabled = newAI.enabled;
+        }
+        if (typeof newAI.api_url === 'string') {
+          aiConfig.api_url = newAI.api_url;
+        }
+        if (typeof newAI.api_key === 'string') {
+          aiConfig.api_key = newAI.api_key;
+        }
+        if (typeof newAI.model === 'string') {
+          aiConfig.model = newAI.model;
+        }
+        if (typeof newAI.timeout === 'number') {
+          aiConfig.timeout = newAI.timeout;
+        }
+        await configManager.saveAIConfig(aiConfig);
       }
 
       // 更新 scheduled_tasks_enabled（联动 Scheduler 启停）
