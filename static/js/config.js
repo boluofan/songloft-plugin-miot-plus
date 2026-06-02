@@ -3,7 +3,7 @@
  * 负责主程序地址等配置的加载和保存
  */
 
-import { apiGet, apiPost, apiDelete } from './common.js';
+import { apiGet, apiPost, apiDelete, getAuthToken } from './common.js';
 import { showSnackbar } from './utils.js';
 
 // 对话记录轮询定时器
@@ -65,6 +65,23 @@ export function loadConfig() {
             const forceMp3Switch = document.getElementById('forceMp3Switch');
             if (forceMp3Switch) {
                 forceMp3Switch.checked = forceMp3;
+            }
+
+            // 外部搜索开关及配置
+            const externalSearchEnabled = !!data.data.external_search_enabled;
+            const externalSearchSwitch = document.getElementById('externalSearchSwitch');
+            if (externalSearchSwitch) {
+                externalSearchSwitch.checked = externalSearchEnabled;
+            }
+            updateExternalSearchConfig(externalSearchEnabled);
+
+            const externalSearchUrlInput = document.getElementById('externalSearchUrlInput');
+            if (externalSearchUrlInput) {
+                externalSearchUrlInput.value = data.data.external_search_url || '';
+            }
+            const externalSearchTokenInput = document.getElementById('externalSearchTokenInput');
+            if (externalSearchTokenInput) {
+                externalSearchTokenInput.value = data.data.external_search_token || '';
             }
 
             // 时区
@@ -156,6 +173,119 @@ export function initForceMp3UI() {
     if (switchEl) {
         switchEl.addEventListener('change', function() {
             toggleForceMp3(this.checked);
+        });
+    }
+}
+
+// ========== 外部搜索配置 ==========
+
+function updateExternalSearchConfig(enabled) {
+    const panel = document.getElementById('externalSearchConfigPanel');
+    if (panel) {
+        panel.style.display = enabled ? 'block' : 'none';
+    }
+}
+
+function saveExternalSearchConfig() {
+    const switchEl = document.getElementById('externalSearchSwitch');
+    const urlInput = document.getElementById('externalSearchUrlInput');
+    const tokenInput = document.getElementById('externalSearchTokenInput');
+    const enabled = switchEl ? switchEl.checked : false;
+    const url = urlInput ? urlInput.value.trim() : '';
+    const token = tokenInput ? tokenInput.value.trim() : '';
+
+    apiPost('/config', { external_search_enabled: enabled, external_search_url: url, external_search_token: token })
+        .then(data => {
+            if (data.success) {
+                showSnackbar('外部搜索配置已保存', 'success');
+            } else {
+                showSnackbar('保存失败：' + (data.error || '未知错误'), 'error');
+            }
+        })
+        .catch(error => {
+            showSnackbar('保存失败：' + error.message, 'error');
+        });
+}
+
+/**
+ * 初始化外部搜索配置 UI
+ */
+export function initExternalSearchUI() {
+    const switchEl = document.getElementById('externalSearchSwitch');
+    if (switchEl) {
+        switchEl.addEventListener('change', function() {
+            updateExternalSearchConfig(this.checked);
+        });
+    }
+
+    const saveBtn = document.getElementById('saveExternalSearchBtn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveExternalSearchConfig);
+    }
+
+    const testBtn = document.getElementById('externalSearchTestBtn');
+    const testInput = document.getElementById('externalSearchTestInput');
+    const testResult = document.getElementById('externalSearchTestResult');
+    if (testBtn && testInput && testResult) {
+        testBtn.addEventListener('click', async function() {
+            const keyword = testInput.value.trim();
+            if (!keyword) {
+                testResult.style.display = 'block';
+                testResult.style.color = 'var(--md-error)';
+                testResult.textContent = '请输入搜索关键字';
+                return;
+            }
+
+            testBtn.disabled = true;
+            testResult.style.display = 'block';
+            testResult.style.color = 'var(--md-on-surface-variant)';
+            testResult.textContent = '测试中...';
+
+            try {
+                const url = document.getElementById('externalSearchUrlInput')?.value.trim();
+                if (!url) {
+                    testResult.style.color = 'var(--md-error)';
+                    testResult.textContent = '请先配置搜索 API 地址';
+                    return;
+                }
+
+                let fullUrl = url;
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                    // 相对路径，拼接当前域名
+                    fullUrl = window.location.origin + url;
+                }
+
+                let token = document.getElementById('externalSearchTokenInput')?.value.trim();
+                const headers = { 'Content-Type': 'application/json' };
+                if (!token) {
+                    token = getAuthToken();
+                }
+                if (token) {
+                    headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+                }
+
+                const resp = await fetch(fullUrl, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ keyword, quality: '320k' }),
+                });
+
+                const text = await resp.text();
+                let json;
+                try {
+                    json = JSON.parse(text);
+                    json = JSON.stringify(json, null, 2);
+                } catch {
+                    json = text;
+                }
+                testResult.style.color = resp.ok ? 'var(--md-primary)' : 'var(--md-error)';
+                testResult.textContent = `状态: ${resp.status}\n\n${json}`;
+            } catch (e) {
+                testResult.style.color = 'var(--md-error)';
+                testResult.textContent = '请求失败: ' + e.message;
+            } finally {
+                testBtn.disabled = false;
+            }
         });
     }
 }
@@ -862,5 +992,159 @@ function updateAIConfigStatus(enabled) {
     const statusText = document.getElementById('aiAnalysisStatusText');
     if (statusText) {
         statusText.textContent = enabled ? '已开启' : '已关闭';
+    }
+}
+
+// ========== 外部搜索接口规范 ==========
+
+const EXTERNAL_SEARCH_SPEC = `
+
+## 概述
+
+💡 本接口用于在本地音乐搜索未命中时调用。接口方需按以下规范返回数据。
+---
+
+❗ **超时时间 6 秒**，超时则忽略本次搜索结果
+---
+
+## 搜索接口
+
+**地址** \`用户配置\`
+**请求方式** POST
+**超时** 6 秒
+**认证（可选）** \`Authorization: {用户配置}\`
+
+---
+
+## 请求体
+
+\`\`\`json
+{
+  "keyword": "歌曲名称",
+  "hint": {
+    "title": "歌曲名称",
+    "artist": "歌手名",
+    "duration": 240
+  },
+  "quality": "320k"
+}
+\`\`\`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| keyword | string | 是 | 搜索关键词（歌曲名） |
+| hint | object | 否 | 歌曲提示信息 |
+| hint.title | string | 否 | 歌曲名称 |
+| hint.artist | string | 否 | 歌手名称 |
+| hint.duration | number | 否 | 时长（秒） |
+| quality | string | 否 | 音质要求，默认 320k |
+
+---
+
+## 成功响应示例
+
+\`\`\`json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "title": "演员",
+    "artist": "薛之谦",
+    "album": "几个薛之谦",
+    "duration": 240,
+    "cover_url": "https://example.com/cover.jpg",
+    "url": "https://example.com/song.mp3",
+    "source_data": {
+      "platform": "netease",
+      "quality": "320k",
+      "songInfo": {
+        "musicId": "123456",
+        "songmid": "0034567890",
+        "hash": "ABCD1234567890",
+        "copyrightId": "789456",
+        "types": [
+          { "type": "128k", "size": "3.2MB" },
+          { "type": "320k", "size": "8.1MB" }
+        ]
+      }
+    }
+  }
+}
+\`\`\`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| code | number | 0=成功，非0=失败 |
+| msg | string | 状态信息 |
+| data.title | string | 歌曲名称 |
+| data.artist | string | 歌手名称 |
+| data.album | string | 专辑名称 |
+| data.duration | number | 时长（秒） |
+| data.cover_url | string | 封面图片 URL |
+| data.url | string | 歌曲播放 URL |
+| data.source_data | object | 非必须 |
+| data.source_data.platform | string | 音源平台 |
+| data.source_data.songInfo.musicId | string | 歌曲 ID |
+| data.source_data.songInfo.hash | string | 歌曲哈希值 |
+
+---
+
+## 失败响应示例
+
+\`\`\`json
+{
+  "code": 500,
+  "msg": "搜索失败",
+  "data": null
+}
+\`\`\`
+
+---
+
+## 错误码
+
+| code | 说明 |
+|------|------|
+| 0 | 成功 |
+| 400 | 请求参数错误 |
+| 404 | 未找到歌曲 |
+| 500 | 服务器内部错误 |
+
+---
+`;
+
+/**
+ * 显示外部搜索接口规范对话框
+ */
+function showExternalSearchSpec() {
+    const dialogTitle = document.getElementById('dialogTitle');
+    const dialogContent = document.getElementById('dialogContent');
+    const dialogConfirmBtn = document.getElementById('dialogConfirmBtn');
+    const dialogCancelBtn = document.getElementById('dialogCancelBtn');
+    const dialogOverlay = document.getElementById('dialogOverlay');
+
+    if (!dialogTitle || !dialogContent) return;
+
+    dialogTitle.textContent = '接口规范';
+    dialogConfirmBtn.style.display = 'none';
+    dialogCancelBtn.textContent = '关闭';
+
+    if (typeof marked !== 'undefined') {
+        marked.setOptions({ breaks: true, gfm: true });
+        dialogContent.innerHTML = '<div class="md-content">' + marked.parse(EXTERNAL_SEARCH_SPEC) + '</div>';
+    } else {
+        dialogContent.innerHTML = '<pre style="white-space:pre-wrap">' + escapeHtml(EXTERNAL_SEARCH_SPEC) + '</pre>';
+    }
+
+    dialogOverlay.classList.add('show');
+}
+
+/**
+ * 初始化外部搜索接口规范链接事件
+ */
+export function initExternalSearchSpecUI() {
+    const link = document.getElementById('externalSearchSpecLink');
+    if (link) {
+        link.addEventListener('click', showExternalSearchSpec);
     }
 }

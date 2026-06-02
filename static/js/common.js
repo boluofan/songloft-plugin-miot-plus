@@ -7,7 +7,7 @@ const API_BASE = '.';
 /**
  * 从 localStorage 获取认证 Token
  */
-function getAuthToken() {
+export function getAuthToken() {
     try {
         const authData = localStorage.getItem('songloft-auth');
         if (authData) {

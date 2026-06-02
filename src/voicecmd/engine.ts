@@ -10,6 +10,7 @@ import { MinaService } from '../service/service';
 import { PlaylistManagerMap } from '../player/manager';
 import { IndexingManager } from '../indexing/manager';
 import { AIAnalyzer } from './ai_analyzer';
+import { OnlineSearcher } from './online_searcher';
 import type { ConversationMessage, VoiceCommand, PlayMode, AIAnalysisResult } from '../types';
 
 // ===== 类型定义 =====
@@ -68,6 +69,7 @@ export class VoiceEngine {
   private playlistManagerMap: PlaylistManagerMap;
   private indexingManager: IndexingManager;
   private aiAnalyzer: AIAnalyzer;
+  private onlineSearcher: OnlineSearcher;
   private enabled: boolean = false;
 
   constructor(
@@ -84,6 +86,7 @@ export class VoiceEngine {
     this.playlistManagerMap = playlistManagerMap;
     this.indexingManager = indexingManager;
     this.aiAnalyzer = aiAnalyzer || new AIAnalyzer();
+    this.onlineSearcher = new OnlineSearcher(configManager);
   }
 
   // ===== 公开方法 =====
@@ -385,7 +388,19 @@ export class VoiceEngine {
     // 从索引中模糊匹配歌曲，获取歌单ID和歌曲索引
     const loc = await this.indexingManager.findSongByName(songName);
     if (!loc) {
-      songloft.log.warn(`[VoiceEngine] Song not found: ${songName}`);
+      songloft.log.warn(`[VoiceEngine] Song not found locally: ${songName}, trying online search`);
+      // 本地缓存歌曲未击中，尝试在线搜索（需配置了外部搜索 API）
+      if (!(await this.onlineSearcher.isExternalSearchConfigured())) {
+        songloft.log.warn('[VoiceEngine] External search not configured, skip online search');
+        return;
+      }
+      const hint = songName.trim() ? { title: songName.trim() } : null;
+      const played = await this.onlineSearcher.searchAndPlay(
+        songName, hint, accountId, deviceId, this.minaService,
+      );
+      if (!played) {
+        songloft.log.warn(`[VoiceEngine] Online search failed for: ${songName}`);
+      }
       return;
     }
 

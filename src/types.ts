@@ -89,6 +89,9 @@ export interface PluginConfig {
   voice_command_enabled: boolean;
   scheduled_tasks_enabled: boolean;
   force_mp3: boolean;
+  external_search_enabled: boolean; // 是否启用外部搜索
+  external_search_url: string;      // 外部搜索 API 地址
+  external_search_token: string;    // 外部搜索 Token 认证
   ai_config: AIConfig;
 }
 

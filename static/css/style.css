@@ -469,7 +469,7 @@ body {
     background: var(--md-surface);
     border-radius: var(--md-radius-lg);
     width: 90%;
-    max-width: 400px;
+    max-width: 640px;
     box-shadow: var(--md-shadow-3);
     padding: 24px;
 }
@@ -485,7 +485,100 @@ body {
     font-size: 14px;
     color: var(--md-on-surface-variant);
     line-height: 1.6;
-    padding: 0 0 16px;
+    padding: 0 8px 16px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+/* Markdown rendered content in dialog */
+.dialog-content .md-content {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.dialog-content .md-content h1 {
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0 0 12px;
+    color: var(--md-on-surface);
+}
+
+.dialog-content .md-content h2 {
+    font-size: 15px;
+    font-weight: 500;
+    margin: 16px 0 8px;
+    color: var(--md-primary);
+    border-bottom: 1px solid var(--md-outline-variant);
+    padding-bottom: 4px;
+}
+
+.dialog-content .md-content h3 {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 12px 0 6px;
+    color: var(--md-on-surface);
+}
+
+.dialog-content .md-content p {
+    margin: 8px 0;
+}
+
+.dialog-content .md-content code {
+    background: var(--md-surface-container-highest);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+}
+
+.dialog-content .md-content pre {
+    background: var(--md-surface-container-highest);
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.dialog-content .md-content pre code {
+    background: none;
+    padding: 0;
+}
+
+.dialog-content .md-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 12px;
+}
+
+.dialog-content .md-content th,
+.dialog-content .md-content td {
+    border: 1px solid var(--md-outline-variant);
+    padding: 7px 10px;
+    text-align: left;
+}
+
+.dialog-content .md-content th {
+    background: var(--md-surface-container-highest);
+    font-weight: 500;
+    color: var(--md-on-surface);
+}
+
+.dialog-content .md-content ul,
+.dialog-content .md-content ol {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.dialog-content .md-content li {
+    margin: 4px 0;
+}
+
+.dialog-content .md-content hr {
+    border: none;
+    border-top: 1px solid var(--md-outline-variant);
+    margin: 16px 0;
 }
 
 .dialog-actions {
@@ -1482,6 +1575,7 @@ body {
 
     .dialog {
         width: 95%;
+        max-width: 560px;
         padding: 20px;
     }
 
@@ -1885,7 +1979,7 @@ body {
 
     /* Dialog — slightly wider on desktop */
     .dialog {
-        min-width: 420px;
+        min-width: 560px;
     }
 
     .playlist-select-panel {
@@ -2030,6 +2124,17 @@ body {
 .switch-row-subtitle {
     font-size: 12px;
     color: var(--md-on-surface-variant);
+}
+
+.link {
+    color: var(--md-primary);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+
+.link:hover {
+    opacity: 0.8;
 }
 
 /* Material Design Switch */

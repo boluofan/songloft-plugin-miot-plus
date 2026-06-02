@@ -71,6 +71,9 @@ export function registerConfigHandlers(
           scheduled_tasks_enabled: config.scheduled_tasks_enabled,
           timezone: config.timezone,
           force_mp3: !!config.force_mp3,
+          external_search_enabled: !!config.external_search_enabled,
+          external_search_url: config.external_search_url || '',
+          external_search_token: config.external_search_token || '',
           server_host_status: getServerHostStatus(config.server_host),
           ai_config: aiConfig,
         },
@@ -120,6 +123,21 @@ export function registerConfigHandlers(
       // 更新 force_mp3
       if (body.force_mp3 !== undefined) {
         config.force_mp3 = !!body.force_mp3;
+      }
+
+      // 更新 external_search_url
+      if (body.external_search_url !== undefined) {
+        config.external_search_url = typeof body.external_search_url === 'string' ? body.external_search_url.trim() : '';
+      }
+
+      // 更新 external_search_token
+      if (body.external_search_token !== undefined) {
+        config.external_search_token = typeof body.external_search_token === 'string' ? body.external_search_token.trim() : '';
+      }
+
+      // 更新 external_search_enabled
+      if (body.external_search_enabled !== undefined) {
+        config.external_search_enabled = !!body.external_search_enabled;
       }
 
       // 更新 ai_config
