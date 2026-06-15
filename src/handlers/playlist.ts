@@ -303,7 +303,7 @@ export function registerPlaylistHandlers(
       }
 
       // 缓存过期，从设备获取真实播放状态
-      let volume = -1;
+      let volume = cached?.volume ?? -1;
       let realPosition = localStatus.position;
       let realDuration = localStatus.duration;
       let realState = localStatus.state;
@@ -328,6 +328,15 @@ export function registerPlaylistHandlers(
 
       // 更新缓存
       deviceStatusCache.set(cacheKey, { volume, state: realState, position: realPosition, duration: realDuration, timestamp: now });
+
+      // 设备状态与本地不一致时同步（同缓存命中路径逻辑）
+      if (realState !== localStatus.state) {
+        if (localStatus.state === 'playing' && realState === 'paused') {
+          manager.suspendForVoiceInteraction();
+        } else if (localStatus.state === 'playing' && realState === 'stopped') {
+          manager.prepareForNewPlayback();
+        }
+      }
 
       return jsonResponse({
         success: true,
