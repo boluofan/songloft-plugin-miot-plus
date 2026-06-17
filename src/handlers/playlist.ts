@@ -175,7 +175,9 @@ export function registerPlaylistHandlers(
       if (!manager) {
         return jsonResponse({ success: false, error: 'no active playlist for this device' });
       }
+      const lastPosition = manager.getStatus().position;
       await manager.stop();
+      updateDeviceStatusCache(account_id, device_id, { state: 'stopped', position: lastPosition });
       return jsonResponse({ success: true, data: { message: 'playlist stopped' } });
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) });
@@ -197,7 +199,9 @@ export function registerPlaylistHandlers(
       const manager = await playlistManagerMap.getOrCreate(account_id, device_id);
 
       if (manager.isPlaying()) {
+        const lastPosition = manager.getStatus().position;
         await manager.stop();
+        updateDeviceStatusCache(account_id, device_id, { state: 'stopped', position: lastPosition });
         return jsonResponse({ success: true, data: { message: 'playlist paused', state: 'stopped' } });
       }
 

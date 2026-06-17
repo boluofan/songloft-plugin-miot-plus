@@ -21,6 +21,9 @@ let currentLyrics = [];     // 解析后的歌词数组
 let currentLyricUrl = '';   // 当前歌词 URL
 let lyricFetchTimer = null; // 歌词获取防抖定时器
 
+/** toggle 防护时间戳（防止过期轮询覆盖 toggle 后的 UI 状态） */
+let lastToggleMs = 0;
+
 /** 播放栏封面 URL（防重复加载） */
 let currentPlayerBarCoverUrl = '';
 /** 播放栏封面 ObjectURL（供回收） */
@@ -134,16 +137,26 @@ export function stopPlaylist() {
     if (!deviceId) return;
 
     showLoading();
+    lastToggleMs = Date.now();
     apiPost('/player/stop?account_id=' + encodeURIComponent(accountId) + '&device_id=' + encodeURIComponent(deviceId), {}).then(data => {
         hideLoading();
         showResult(data);
         if (data.success) {
+            isCurrentlyPlaying = false;
+            stopProgressAnimation();
+            updateProgressDOM(currentPosition, currentDuration);
+            const playBtn = document.getElementById('playBtn');
+            if (playBtn) {
+                const icon = playBtn.querySelector('.material-symbols-outlined');
+                if (icon) icon.textContent = 'play_arrow';
+            }
             showSnackbar('已停止播放', 'success');
             if (window.tracely) {
                 window.tracely.reportEvent('song_stop', { account_id: accountId, device_id: deviceId });
             }
-            loadDeviceStatus();
+            loadDeviceStatus(true);
         } else {
+            lastToggleMs = 0;
             showSnackbar('停止失败：' + (data.error || data.message || '未知错误'), 'error');
             if (window.tracely) {
                 window.tracely.reportEvent('api_error', { path: '/player/stop', error: data.error || data.message || '未知错误' });
@@ -151,6 +164,7 @@ export function stopPlaylist() {
         }
     }).catch(error => {
         hideLoading();
+        lastToggleMs = 0;
         showResult({ error: error.message });
         showSnackbar('停止失败：' + error.message, 'error');
         if (window.tracely) {
@@ -239,17 +253,30 @@ export function togglePlayPause() {
     if (!deviceId) return;
 
     showLoading();
+    lastToggleMs = Date.now();
     apiPost('/player/toggle?account_id=' + encodeURIComponent(accountId) + '&device_id=' + encodeURIComponent(deviceId), {}).then(data => {
         hideLoading();
         showResult(data);
         if (data.success) {
+            if (data.data && data.data.state === 'stopped') {
+                isCurrentlyPlaying = false;
+                stopProgressAnimation();
+                updateProgressDOM(currentPosition, currentDuration);
+                const playBtn = document.getElementById('playBtn');
+                if (playBtn) {
+                    const icon = playBtn.querySelector('.material-symbols-outlined');
+                    if (icon) icon.textContent = 'play_arrow';
+                }
+            }
             showSnackbar('播放状态已切换', 'success');
-            loadDeviceStatus();
+            loadDeviceStatus(true);
         } else {
+            lastToggleMs = 0;
             showSnackbar('切换失败：' + (data.error || data.message || '未知错误'), 'error');
         }
     }).catch(error => {
         hideLoading();
+        lastToggleMs = 0;
         showResult({ error: error.message });
         showSnackbar('切换失败：' + error.message, 'error');
     });
@@ -592,8 +619,9 @@ export function toggleMute() {
  * 加载设备播放状态并更新 UI 显示
  * 从 player/status 接口获取实时状态
  */
-export function loadDeviceStatus() {
-    // 静默读取，不触发 Snackbar 提示（此函数由定时器每秒调用）
+export function loadDeviceStatus(force) {
+    if (!force && lastToggleMs > 0 && (Date.now() - lastToggleMs < 2000)) return;
+
     const accountId = window.currentAccountId || '';
     if (!accountId) return;
     const deviceId = window.currentDeviceId || '';
