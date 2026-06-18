@@ -115,6 +115,9 @@ function stopProgressAnimation() {
 /** 音量设置防抖定时器 */
 let volumeDebounceTimer = null;
 
+/** 最近一次用户操作音量的时间戳，用于抑制轮询覆盖 */
+let lastVolumeInteractTime = 0;
+
 /** 静音前保存的音量值 */
 let lastVolumeBeforeMute = 50;
 
@@ -370,11 +373,12 @@ export function updatePlayerUI(status) {
         highlightSongItem(status.current_index);
     }
 
-    // 同步设备实际音量到 UI（用户正在拖动滑块时跳过，避免覆盖操作）
+    // 同步设备实际音量到 UI（用户正在拖动或刚操作完 2 秒内跳过，避免覆盖）
     if (status.volume !== undefined && status.volume >= 0) {
         const volumeSlider = document.getElementById('volumeSlider');
         const volumePercent = document.getElementById('volumePercent');
-        if (volumeSlider && !volumeSlider.matches(':active')) {
+        const recentlyInteracted = Date.now() - lastVolumeInteractTime < 2000;
+        if (volumeSlider && !volumeSlider.matches(':active') && !recentlyInteracted) {
             volumeSlider.value = status.volume;
             if (volumePercent) volumePercent.textContent = status.volume + '%';
             if (status.volume > 0) lastVolumeBeforeMute = status.volume;
@@ -546,6 +550,7 @@ export function setVolume() {
  * 自动设置音量（带防抖）
  */
 export function autoSetVolume() {
+    lastVolumeInteractTime = Date.now();
     if (volumeDebounceTimer) {
         clearTimeout(volumeDebounceTimer);
     }

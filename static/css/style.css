@@ -832,7 +832,7 @@
     border-top: 1px solid var(--md-outline-variant);
     box-shadow: 0 -2px 8px rgba(0,0,0,.08);
     z-index: 98;
-    padding: 12px 20px 8px;
+    padding: 6px 16px 4px;
 }
 
 .player-bar-info {
@@ -860,8 +860,8 @@
 .progress-bar-container {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 0 8px;
+    gap: 6px;
+    padding: 2px 0;
 }
 
 .progress-time {
@@ -938,21 +938,21 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 0;
+    padding: 2px 0;
 }
 
 .playback-controls .btn-icon {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
 }
 
 .playback-controls .btn-icon .material-symbols-outlined {
-    font-size: 28px;
+    font-size: 26px;
 }
 
 .playback-controls .play-btn {
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
     background: var(--md-primary);
     color: var(--md-on-primary);
     border-radius: 50%;
@@ -965,7 +965,7 @@
 }
 
 .playback-controls .play-btn .material-symbols-outlined {
-    font-size: 32px;
+    font-size: 28px;
 }
 
 /* Account Card */
@@ -1870,8 +1870,13 @@
         max-width: 800px;
     }
 
-    .player-bar {
-        border-top: 1px solid var(--md-outline-variant);
+    .toolbar-device-label {
+        max-width: none;
+    }
+
+    .player-bar-top {
+        max-width: 600px;
+        margin: 0 auto;
     }
 
     .playback-controls {
@@ -1915,6 +1920,10 @@
         margin-bottom: 0;
     }
 
+    .player-bar-top {
+        max-width: 680px;
+    }
+
     .playback-controls {
         max-width: 680px;
     }
@@ -1933,6 +1942,10 @@
 
     #tab-devices .container {
         max-width: 1200px;
+    }
+
+    .player-bar-top {
+        max-width: 720px;
     }
 
     .playback-controls {
@@ -2703,13 +2716,13 @@ html.embed #tab-player {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
     border-radius: var(--md-radius-md);
     overflow: hidden;
     cursor: pointer;
     flex-shrink: 0;
-    margin-right: 12px;
+    margin-right: 10px;
     position: relative;
 }
 
@@ -2728,29 +2741,54 @@ html.embed #tab-player {
     background: var(--md-surface-variant);
 }
 
-/* Player bar info - lyric line */
+/* Player bar info - title + lyric two lines, centered */
 .player-bar-info {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
 }
 
-.player-bar-lyric {
+.player-bar-meta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 18px;
+    line-height: 18px;
+    max-width: 100%;
+}
+
+.player-bar-title {
     font-size: 14px;
     font-weight: 500;
     color: var(--md-on-surface);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    min-height: 20px;
-    line-height: 20px;
 }
 
-.player-bar-meta {
-    display: none;
+.player-bar-artist {
+    font-size: 12px;
+    color: var(--md-on-surface-variant);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
 }
 
-.player-bar-cover-wrap:has(.player-bar-cover[src]):not(.player-bar-cover[src=""]) ~ .player-bar-info .player-bar-meta {
-    display: none;
+.player-bar-lyric {
+    font-size: 13px;
+    color: var(--md-on-surface-variant);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-height: 18px;
+    line-height: 18px;
+    max-width: 100%;
 }
 
 /* Embed mode adjustments */
@@ -2769,7 +2807,7 @@ html.embed .player-bar-cover {
 .player-bar-top {
     display: flex;
     align-items: center;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .player-bar-top-clickable {

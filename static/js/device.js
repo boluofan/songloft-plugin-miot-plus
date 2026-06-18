@@ -246,10 +246,10 @@ export function updateCurrentDeviceCard(accountId, deviceId) {
         }
     }
 
-    // 更新工具栏设备标签（显示设备名前 2 字）
+    // 更新工具栏设备标签
     const toolbarLabel = document.getElementById('toolbarDeviceLabel');
     if (toolbarLabel) {
-        toolbarLabel.textContent = (device.name || device.alias || '设备').substring(0, 2);
+        toolbarLabel.textContent = device.name || device.alias || '设备';
     }
 }
 
