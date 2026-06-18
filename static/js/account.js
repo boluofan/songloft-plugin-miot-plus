@@ -60,9 +60,9 @@ function handleReLoginFallback(accountId, loginMethod) {
  * @param {string} [accountId] - 账号 ID（扫码登录时传入）
  */
 function switchToAuthTab(tabName, accountId) {
-    // 切换到设备管理 Tab
-    if (window.switchTab) {
-        window.switchTab('devices');
+    // 导航到账号管理页
+    if (window.navigateTo) {
+        window.navigateTo('devices');
     }
 
     // 切换子 Tab

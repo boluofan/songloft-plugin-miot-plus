@@ -196,9 +196,9 @@ export function confirmDeviceSelection() {
 
     showSnackbar('设备切换成功', 'success');
 
-    // 切换到播放控制 Tab
-    if (window.switchTab) {
-        window.switchTab('player');
+    // 返回播放主页
+    if (window.navigateBack) {
+        window.navigateBack();
     }
 
     // 启动播放状态轮询
@@ -244,6 +244,12 @@ export function updateCurrentDeviceCard(accountId, deviceId) {
             deviceStatusEl.textContent = '离线';
             deviceStatusEl.className = 'current-device-status offline';
         }
+    }
+
+    // 更新工具栏设备标签（显示设备名前 2 字）
+    const toolbarLabel = document.getElementById('toolbarDeviceLabel');
+    if (toolbarLabel) {
+        toolbarLabel.textContent = (device.name || device.alias || '设备').substring(0, 2);
     }
 }
 

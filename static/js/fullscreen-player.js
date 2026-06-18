@@ -63,7 +63,6 @@ export function openFullscreenPlayer() {
     document.body.style.overflow = 'hidden';
 
     document.querySelector('.player-bar')?.classList.add('fp-hidden');
-    document.querySelector('.tab-bar')?.classList.add('fp-hidden');
 
     syncFromPlaybackState();
     startProgressAnimation();
@@ -82,7 +81,6 @@ export function closeFullscreenPlayer() {
     const onEnd = () => {
         el.removeEventListener('transitionend', onEnd);
         document.querySelector('.player-bar')?.classList.remove('fp-hidden');
-        document.querySelector('.tab-bar')?.classList.remove('fp-hidden');
     };
     el.addEventListener('transitionend', onEnd);
 }

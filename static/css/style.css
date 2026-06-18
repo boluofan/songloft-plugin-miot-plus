@@ -28,120 +28,101 @@
     background: rgba(255,255,255,.15);
 }
 
-/* AppBar Device Selector */
-.app-bar-device {
-    display: flex;
-    align-items: center;
-    margin-left: 12px;
-    padding: 6px 10px;
-    border-radius: var(--md-radius-full);
-    cursor: pointer;
-    transition: background .2s;
-    overflow: hidden;
-    min-width: 0;
+/* AppBar Navigation */
+.app-bar-back {
+    margin-right: 4px;
+}
+
+.app-bar-icon {
+    margin-right: 8px;
 }
 
 .app-bar #refreshBtn {
     margin-left: auto;
 }
 
-.app-bar-device:hover {
-    background: rgba(255,255,255,.15);
+/* Player Toolbar — 歌单选择 + 设备选择同行 */
+.player-toolbar {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    z-index: 97;
+    display: flex;
+    align-items: center;
+    height: 48px;
+    background: var(--md-surface);
+    border-bottom: 1px solid var(--md-outline-variant);
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
 }
 
-.app-bar-device:active {
-    background: rgba(255,255,255,.25);
-}
-
-.app-bar-device-name {
-    color: var(--md-on-primary);
-    font-size: 14px;
-    font-weight: 400;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 160px;
-    text-align: center;
-}
-
-.app-bar-device-arrow {
-    color: rgba(255,255,255,.7);
-    font-size: 20px;
-    margin-left: 2px;
+.toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--md-outline-variant);
     flex-shrink: 0;
 }
 
-/* Tab Bar */
-.tab-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
+/* Toolbar Device Selector Chip */
+.toolbar-device-selector {
     display: flex;
-    height: 64px;
-    background: var(--md-surface);
-    z-index: 99;
-    border-top: 1px solid var(--md-outline-variant);
-    padding-bottom: env(safe-area-inset-bottom);
-    box-sizing: content-box;
-}
-
-.tab-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
     align-items: center;
-    justify-content: center;
     gap: 4px;
-    padding: 8px 16px;
-    border: none;
-    background: transparent;
-    color: var(--md-on-surface-variant);
-    font-size: 12px;
-    font-weight: 500;
-    font-family: inherit;
+    padding: 6px 12px;
+    margin: 0 8px;
+    border-radius: var(--md-radius-full);
     cursor: pointer;
-    position: relative;
-    transition: color .2s;
-    letter-spacing: .4px;
+    transition: background 0.15s;
+    flex-shrink: 0;
 }
 
-.tab-item .material-symbols-outlined { font-size: 22px; }
-
-.tab-item::after {
-    content: '';
-    position: absolute;
-    top: 6px;
-    left: 50%;
-    transform: translateX(-50%) scaleX(0);
-    width: 64px;
-    height: 32px;
-    background: var(--md-primary-container);
-    border-radius: 16px;
-    z-index: -1;
-    transition: transform .2s;
+.toolbar-device-selector:hover {
+    background: var(--md-surface-1);
 }
 
-.tab-item.active {
-    color: var(--md-primary);
+.toolbar-device-selector:active {
+    background: var(--md-surface-2);
 }
 
-.tab-item.active::after { transform: translateX(-50%) scaleX(1); }
+.toolbar-device-icon {
+    font-size: 18px;
+    color: var(--md-on-surface-variant);
+}
 
-.tab-item:hover:not(.active) { background: rgba(99,102,241,.06); }
+.toolbar-device-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--md-on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 56px;
+}
 
-/* Tab Content */
-.tab-content {
+.toolbar-device-arrow {
+    font-size: 16px;
+    color: var(--md-on-surface-variant);
+}
+
+/* Page Content */
+.page-content {
     display: none;
     padding-top: 72px;
-    padding-bottom: 200px;
+    padding-bottom: 160px;
     min-height: 100vh;
     overflow-x: hidden;
 }
 
 #tab-player {
-    padding-top: 120px;
+    padding-top: 112px;
 }
 
-.tab-content.active { display: block; }
+#tab-devices,
+#tab-settings {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+.page-content.active { display: block; }
 
 /* Container */
 .container {
@@ -578,20 +559,19 @@
 
 /* 歌单选择栏 — MD3 Filled style, fixed below AppBar */
 .playlist-selector {
-    position: fixed;
-    top: 56px;
-    left: 0;
-    right: 0;
-    z-index: 97;
+    position: static;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
-    background: var(--md-surface);
-    border-bottom: 1px solid var(--md-outline-variant);
-    padding: 12px 20px;
+    background: transparent;
+    border-bottom: none;
+    padding: 0 16px;
     gap: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    box-shadow: none;
     cursor: pointer;
     transition: background 0.15s;
+    height: 100%;
 }
 
 .playlist-selector:hover {
@@ -1886,88 +1866,11 @@
 /* ---------- Breakpoint 1: Desktop (1024px+) ---------- */
 @media (min-width: 1024px) {
 
-    /* Tab Bar → Left Navigation Rail */
-    .tab-bar {
-        position: fixed;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        right: auto;
-        width: 80px;
-        height: auto;
-        flex-direction: column;
-        border-top: none;
-        border-right: 1px solid var(--md-outline-variant);
-        padding-top: 72px;
-        justify-content: flex-start;
-        gap: 8px;
-        padding-left: 0;
-        padding-right: 0;
-    }
-
-    /* Tab Item — vertical layout adjustments */
-    .tab-item {
-        flex: none;
-        width: 100%;
-        padding: 12px 0;
-    }
-
-    /* Tab indicator — reposition for vertical nav (centered on icon area) */
-    .tab-item::after {
-        top: 7px;
-        left: 50%;
-        transform: translateX(-50%) scaleX(0);
-        width: 56px;
-        height: 32px;
-    }
-
-    .tab-item.active::after {
-        transform: translateX(-50%) scaleX(1);
-    }
-
-    /* AppBar — offset for side nav */
-    .app-bar {
-        left: 80px;
-    }
-
-    /* AppBar device selector - centered on desktop */
-    .app-bar-device {
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        margin-left: 0;
-        max-width: calc(100% - 260px);
-    }
-
-    /* Tab Content — offset for side nav */
-    .tab-content {
-        margin-left: 80px;
-        padding-bottom: 160px;
-    }
-
-    #tab-player {
-        padding-top: 120px;
-    }
-
-    /* Container — adjusted max-width for desktop */
     .container {
         max-width: 800px;
     }
 
-    /* Playlist Selector — offset for side nav */
-    .playlist-selector {
-        left: 80px;
-        max-width: 800px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-
-    /* Player Bar — offset + centered in content area */
     .player-bar {
-        left: 80px;
-        right: 0;
-        bottom: 0;
-        max-width: none;
         border-top: 1px solid var(--md-outline-variant);
     }
 
@@ -1981,80 +1884,26 @@
         margin: 0 auto;
     }
 
-    /* Snackbar — offset for side nav */
     .snackbar {
-        left: calc(50% + 40px);
         bottom: 120px;
     }
 
-    /* Popup layers stay above side nav (z-index 150+, nav is 99) — no change needed */
-
-    /* Card layout improvements for devices tab */
     #tab-devices .container {
         max-width: 900px;
     }
 
-    /* Dialog — slightly wider on desktop */
     .dialog {
         min-width: 560px;
-    }
-
-    .playlist-select-panel {
-        left: 80px;
-        right: 0;
-        margin-left: auto;
-        margin-right: auto;
     }
 }
 
 /* ---------- Breakpoint 2: Large Desktop (1440px+) ---------- */
 @media (min-width: 1440px) {
 
-    /* Navigation Rail — wider */
-    .tab-bar {
-        width: 100px;
-    }
-
-    /* Adjust all left offsets to 100px */
-    .app-bar {
-        left: 100px;
-    }
-
-    /* AppBar device selector - wider for large desktop */
-    .app-bar-device {
-        max-width: calc(100% - 300px);
-    }
-
-    .tab-content {
-        margin-left: 100px;
-    }
-
-    .playlist-selector {
-        left: 100px;
-        max-width: 900px;
-    }
-
-    .playlist-select-panel {
-        left: 100px;
-        right: 0;
-        margin-left: auto;
-        margin-right: auto;
-    }
-
-    .player-bar {
-        left: 100px;
-    }
-
-    .snackbar {
-        left: calc(50% + 50px);
-    }
-
-    /* Container — wider */
     .container {
         max-width: 900px;
     }
 
-    /* Devices tab — grid layout for cards side by side */
     #tab-devices .container {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -2062,12 +1911,10 @@
         max-width: 1100px;
     }
 
-    /* Full-width cards that span both columns when needed */
     #tab-devices .container > .card {
         margin-bottom: 0;
     }
 
-    /* Playback controls — wider limit */
     .playback-controls {
         max-width: 680px;
     }
@@ -2080,29 +1927,12 @@
 /* ---------- Breakpoint 3: Ultra-wide (1920px+) ---------- */
 @media (min-width: 1920px) {
 
-    .playlist-select-panel {
-        left: 100px;
-        right: 0;
-    }
-
-    /* Playlist Selector — wider max-width */
-    .playlist-selector {
-        max-width: 1000px;
-    }
-
-    /* Container — even wider */
     .container {
         max-width: 1000px;
     }
 
-    /* Devices tab — wider grid */
     #tab-devices .container {
         max-width: 1200px;
-    }
-
-    /* Slightly more breathing room */
-    .tab-content {
-        padding-bottom: 180px;
     }
 
     .playback-controls {
@@ -2834,56 +2664,20 @@
 /* ── embed 模式：嵌入 App Tab 时的布局 ── */
 html.embed .app-bar {
     display: flex !important;
-    top: 48px !important;
+    top: 0 !important;
     height: 44px !important;
     box-shadow: none !important;
     border-bottom: 1px solid var(--md-outline-variant) !important;
 }
-html.embed .app-bar > .material-symbols-outlined:first-child,
+html.embed .app-bar-icon,
 html.embed .app-bar > h1 {
     display: none !important;
 }
-html.embed .tab-bar {
-    top: 0 !important;
-    bottom: auto !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: auto !important;
-    height: 48px !important;
-    flex-direction: row !important;
-    border-top: none !important;
-    border-bottom: 1px solid var(--md-outline-variant) !important;
-    border-right: none !important;
-    padding-bottom: 0 !important;
-    padding-top: 0 !important;
+html.embed .player-toolbar {
+    top: 44px !important;
 }
-html.embed .tab-item {
-    flex: 1 !important;
-    width: auto !important;
-    flex-direction: row !important;
-    gap: 8px !important;
-    font-size: 14px !important;
-    padding: 0 16px !important;
-}
-html.embed .tab-item .material-symbols-outlined {
-    font-size: 18px !important;
-}
-html.embed .tab-item::after {
-    top: auto !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
-    height: 3px !important;
-    border-radius: 3px 3px 0 0 !important;
-    background: var(--md-primary) !important;
-    transform: scaleX(0) !important;
-}
-html.embed .tab-item.active::after {
-    transform: scaleX(1) !important;
-}
-html.embed .tab-content {
-    padding-top: 100px !important;
+html.embed .page-content {
+    padding-top: 92px !important;
     padding-bottom: 16px !important;
     margin-left: 0 !important;
 }
@@ -2896,11 +2690,7 @@ html.embed .player-bar {
     bottom: 0 !important;
 }
 html.embed #tab-player {
-    padding-top: 148px !important;
-}
-html.embed .playlist-selector {
-    top: 92px !important;
-    left: 0 !important;
+    padding-top: 100px !important;
 }
 
 /* ============================================ */
@@ -3399,8 +3189,7 @@ html.embed .player-bar-cover {
     }
 }
 
-/* Hide player-bar and tab-bar when fullscreen player is open */
-.player-bar.fp-hidden,
-.tab-bar.fp-hidden {
+/* Hide player-bar when fullscreen player is open */
+.player-bar.fp-hidden {
     display: none !important;
 }

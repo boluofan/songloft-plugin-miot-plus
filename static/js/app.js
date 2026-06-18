@@ -51,63 +51,80 @@ import { initScheduleUI, loadSchedules } from './schedule.js';
 import { initIndexingUI, loadIndexStatus } from './indexing.js';
 import { initFullscreenPlayer, openFullscreenPlayer, closeFullscreenPlayer } from './fullscreen-player.js';
 
-// ========== Tab 切换逻辑 ==========
+// ========== 页面导航逻辑 ==========
+
+/** 当前活动页面 */
+let currentPage = 'player';
 
 /**
- * 切换 Tab 页面
- * @param {string} tabId - Tab ID: 'player', 'devices', 'settings'
+ * 导航到子页面
+ * @param {string} pageId - 'devices' 或 'settings'
  */
-window.switchTab = function(tabId) {
-    // 如果不是由 popstate 触发，则推入历史记录
-    if (!window._isPopState) {
-        history.pushState({ tab: tabId }, '', '#' + tabId);
-    }
-    // 切换内容区域
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+window.navigateTo = function(pageId) {
+    if (currentPage === pageId) return;
+    history.pushState({ page: pageId }, '', '#' + pageId);
+    showPage(pageId);
+};
 
-    const tabContent = document.getElementById('tab-' + tabId);
-    const tabItem = document.querySelector(`.tab-item[data-tab="${tabId}"]`);
+/**
+ * 返回上一页
+ */
+window.navigateBack = function() {
+    history.back();
+};
 
-    if (tabContent) tabContent.classList.add('active');
-    if (tabItem) tabItem.classList.add('active');
+/**
+ * 显示指定页面，更新 AppBar 状态
+ * @param {string} pageId - 'player', 'devices', 'settings'
+ */
+function showPage(pageId) {
+    currentPage = pageId;
 
-    // 切换 Tab 时重置滚动位置
+    document.querySelectorAll('.page-content').forEach(el => el.classList.remove('active'));
+    const pageContent = document.getElementById('tab-' + pageId);
+    if (pageContent) pageContent.classList.add('active');
+
     window.scrollTo(0, 0);
 
-    // 设备名称仅在播放控制 Tab 显示
-    const appBarDevice = document.getElementById('currentDeviceCard');
-    if (appBarDevice) {
-        appBarDevice.style.display = (tabId === 'player') ? 'flex' : 'none';
-    }
+    const isMain = pageId === 'player';
 
-    // 播放控制栏仅在播放控制 Tab 显示
+    // AppBar 状态切换
+    const navBackBtn = document.getElementById('navBackBtn');
+    const appBarIcon = document.getElementById('appBarIcon');
+    const appBarTitle = document.getElementById('appBarTitle');
+    const accountBtn = document.getElementById('accountBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+
+    if (navBackBtn) navBackBtn.style.display = isMain ? 'none' : '';
+    if (appBarIcon) appBarIcon.style.display = isMain ? '' : 'none';
+    if (appBarTitle) appBarTitle.textContent = isMain ? 'MIoT 智能音箱' : pageId === 'devices' ? '账号管理' : '设置';
+    if (accountBtn) accountBtn.style.display = isMain ? '' : 'none';
+    if (settingsBtn) settingsBtn.style.display = isMain ? '' : 'none';
+
+    // 工具栏 + 播放栏仅播放页可见
+    const playerToolbar = document.getElementById('playerToolbar');
+    if (playerToolbar) playerToolbar.style.display = isMain ? 'flex' : 'none';
+
     const playerBar = document.querySelector('.player-bar');
-    if (playerBar) {
-        playerBar.style.display = (tabId === 'player') ? '' : 'none';
-    }
+    if (playerBar) playerBar.style.display = isMain ? '' : 'none';
 
-    // 歌单选择栏仅在播放控制 Tab 显示
-    const playlistSelector = document.querySelector('.playlist-selector');
-    if (playlistSelector) {
-        playlistSelector.style.display = (tabId === 'player') ? 'flex' : 'none';
-    }
-
-    // 切换到设备管理 Tab 时加载设备列表
-    if (tabId === 'devices') {
+    // 子页面数据加载
+    if (pageId === 'devices') {
         loadDevices();
         loadAccounts();
     }
-
-    // 切换到设置 Tab 时加载配置
-    if (tabId === 'settings') {
+    if (pageId === 'settings') {
         loadConfig();
         loadSchedules();
         loadIndexStatus();
     }
-};
+}
 
 // ========== 将函数挂载到 window 供 HTML onclick 调用 ==========
+
+// 页面导航
+window.navigateTo = window.navigateTo;
+window.navigateBack = window.navigateBack;
 
 // 设备管理
 window.loadDevices = loadDevices;
@@ -194,16 +211,13 @@ export function stopPlayerStatusPolling() {
 // ========== 初始化 ==========
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 设置初始历史状态（使用 replaceState 避免多余条目）
-    history.replaceState({ tab: 'player' }, '', '#player');
+    // 设置初始历史状态
+    history.replaceState({ page: 'player' }, '', '#player');
 
-    // 监听浏览器返回/前进，恢复对应 Tab
+    // 监听浏览器返回/前进
     window.addEventListener('popstate', (event) => {
-        if (event.state && event.state.tab) {
-            window._isPopState = true;
-            window.switchTab(event.state.tab);
-            window._isPopState = false;
-        }
+        const page = event.state?.page || event.state?.tab || 'player';
+        showPage(page);
     });
 
     // 初始化 Tracely 监控 SDK
@@ -232,13 +246,21 @@ document.addEventListener('DOMContentLoaded', () => {
         updatePlayModeButton('loop', defaultMode.label, defaultMode.icon);
     }
 
-    // ========== Tab Bar 事件绑定 ==========
-    document.querySelectorAll('.tab-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tabId = btn.dataset.tab;
-            if (tabId) window.switchTab(tabId);
-        });
-    });
+    // ========== 导航按钮事件绑定 ==========
+    const navBackBtn = document.getElementById('navBackBtn');
+    if (navBackBtn) {
+        navBackBtn.addEventListener('click', navigateBack);
+    }
+
+    const accountBtn = document.getElementById('accountBtn');
+    if (accountBtn) {
+        accountBtn.addEventListener('click', () => navigateTo('devices'));
+    }
+
+    const settingsNavBtn = document.getElementById('settingsBtn');
+    if (settingsNavBtn) {
+        settingsNavBtn.addEventListener('click', () => navigateTo('settings'));
+    }
 
     // ========== Auth 子 Tab 切换 ==========
     document.querySelectorAll('.auth-tab-btn').forEach(btn => {

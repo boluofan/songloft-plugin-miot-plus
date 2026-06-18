@@ -11,29 +11,40 @@
 <body>
     <!-- AppBar -->
     <header class="app-bar">
-        <span class="material-symbols-outlined">speaker</span>
-        <h1>MIoT 智能音箱</h1>
-        <div class="app-bar-device" id="currentDeviceCard" onclick="toggleDeviceSelectPanel(this)">
-            <span class="app-bar-device-name" id="currentDeviceName">未选择设备</span>
-            <span class="material-symbols-outlined app-bar-device-arrow">expand_more</span>
-            <!-- 隐藏但保留供 JS 使用 -->
-            <span id="currentDeviceAccount" style="display:none"></span>
-            <span id="currentDeviceStatus" style="display:none"></span>
-        </div>
+        <button class="btn-icon app-bar-back" id="navBackBtn" style="display:none" title="返回">
+            <span class="material-symbols-outlined">arrow_back</span>
+        </button>
+        <span class="material-symbols-outlined app-bar-icon" id="appBarIcon">speaker</span>
+        <h1 id="appBarTitle">MIoT 智能音箱</h1>
+        <button class="btn-icon" id="accountBtn" title="账号管理">
+            <span class="material-symbols-outlined">person</span>
+        </button>
+        <button class="btn-icon" id="settingsBtn" title="设置">
+            <span class="material-symbols-outlined">settings</span>
+        </button>
         <button class="btn-icon" id="refreshBtn" title="刷新">
             <span class="material-symbols-outlined">refresh</span>
         </button>
     </header>
 
-    <!-- Tab 1: 播放控制 -->
-    <div class="tab-content active" id="tab-player">
+    <!-- Player Toolbar: 歌单选择 + 设备选择 -->
+    <div class="player-toolbar" id="playerToolbar">
+        <div class="playlist-selector" id="playlistSelectorBar" onclick="togglePlaylistSelectPanel(this)">
+            <span class="material-symbols-outlined">queue_music</span>
+            <span class="playlist-selector-text" id="playlistSelectorText">请选择歌单</span>
+            <span class="material-symbols-outlined playlist-selector-arrow">expand_more</span>
+        </div>
+        <div class="toolbar-divider"></div>
+        <div class="toolbar-device-selector" id="toolbarDeviceCard" onclick="toggleDeviceSelectPanel(this)">
+            <span class="material-symbols-outlined toolbar-device-icon">speaker</span>
+            <span class="toolbar-device-label" id="toolbarDeviceLabel">设备</span>
+            <span class="material-symbols-outlined toolbar-device-arrow">expand_more</span>
+        </div>
+    </div>
+
+    <!-- Page: 播放控制 -->
+    <div class="page-content active" id="tab-player">
         <div class="container">
-            <!-- 歌单选择栏 -->
-            <div class="playlist-selector" id="playlistSelectorBar" onclick="togglePlaylistSelectPanel(this)">
-                <span class="material-symbols-outlined">queue_music</span>
-                <span class="playlist-selector-text" id="playlistSelectorText">请选择歌单</span>
-                <span class="material-symbols-outlined playlist-selector-arrow">expand_more</span>
-            </div>
             <select id="playlistSelect" style="display:none" aria-label="选择歌单"></select>
 
             <!-- 歌曲搜索栏 -->
@@ -49,13 +60,16 @@
         </div>
     </div>
 
-    <!-- Tab 2: 设备管理 -->
-    <div class="tab-content" id="tab-devices">
+    <!-- Page: 账号管理 -->
+    <div class="page-content" id="tab-devices">
         <div class="container">
             <!-- 隐藏的 select 元素供 JS 使用 -->
             <div style="display:none">
                 <select id="accountSelect" aria-label="选择账号"></select>
                 <select id="deviceSelect" aria-label="选择设备"></select>
+                <span id="currentDeviceName"></span>
+                <span id="currentDeviceAccount"></span>
+                <span id="currentDeviceStatus"></span>
             </div>
 
             <!-- 账号登录卡片 -->
@@ -172,8 +186,8 @@
         </div>
     </div>
 
-    <!-- Tab 3: 设置 -->
-    <div class="tab-content" id="tab-settings">
+    <!-- Page: 设置 -->
+    <div class="page-content" id="tab-settings">
         <div class="container">
             <!-- 服务器地址配置卡片 -->
             <div class="card">
@@ -696,22 +710,6 @@
             </button>
         </div>
     </div>
-
-    <!-- Tab Bar -->
-    <nav class="tab-bar" role="tablist">
-        <button class="tab-item active" data-tab="player" role="tab">
-            <span class="material-symbols-outlined">play_circle</span>
-            <span>播放控制</span>
-        </button>
-        <button class="tab-item" data-tab="devices" role="tab">
-            <span class="material-symbols-outlined">devices</span>
-            <span>设备管理</span>
-        </button>
-        <button class="tab-item" data-tab="settings" role="tab">
-            <span class="material-symbols-outlined">settings</span>
-            <span>设置</span>
-        </button>
-    </nav>
 
     <!-- 歌单选择弹出层 -->
     <div id="playlistSelectBackdrop" class="popup-backdrop" style="display:none" onclick="closePlaylistSelectPanel()"></div>
