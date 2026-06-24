@@ -7,7 +7,7 @@ import { ConfigManager } from '../config/manager';
 import { ConversationMonitor } from '../conversation/monitor';
 import { Scheduler } from '../schedule/scheduler';
 import { VoiceEngine } from '../voicecmd/engine';
-import { setHostBaseUrl } from '../utils/http';
+import { setHostBaseUrl, callHostAPI } from '../utils/http';
 
 /** 解析请求体（兼容 Uint8Array 和 string） */
 function parseBody(req: HTTPRequest): any {
@@ -262,5 +262,39 @@ export function registerConfigHandlers(
     } catch (e: any) {
       return jsonResponse({ success: false, error: e.message || String(e) }, 500);
     }
+  });
+
+  // GET /search-providers - 获取可用的外部搜索提供方列表
+  router.get('/search-providers', async (_req: HTTPRequest) => {
+    const knownProviders = [
+      { id: 'ytdlp', name: 'yt-dlp', entryPath: 'ytdlp', searchPath: '/api/search/topone' },
+      { id: 'subsonic', name: 'Subsonic', entryPath: 'subsonic', searchPath: '/api/search/topone' },
+    ];
+
+    interface HostPlugin {
+      entry_path: string;
+      status: string;
+    }
+
+    let installedPlugins: HostPlugin[] = [];
+    try {
+      const data = await callHostAPI<{ plugins: HostPlugin[] }>('GET', '/api/v1/jsplugins/');
+      installedPlugins = data.plugins || [];
+    } catch (e) {
+      songloft.log.warn('[config] Failed to fetch plugin list: ' + String(e));
+    }
+
+    const providers = knownProviders.map(p => {
+      const found = installedPlugins.find(ip => ip.entry_path === p.entryPath);
+      return {
+        id: p.id,
+        name: p.name,
+        url: `/api/v1/jsplugin/${p.entryPath}${p.searchPath}`,
+        installed: !!found,
+        active: found?.status === 'active',
+      };
+    });
+
+    return jsonResponse({ providers });
   });
 }

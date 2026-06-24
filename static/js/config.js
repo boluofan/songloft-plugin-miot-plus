@@ -94,14 +94,25 @@ export function loadConfig() {
             }
             updateExternalSearchConfig(externalSearchEnabled);
 
+            const savedUrl = data.data.external_search_url || '';
+            const savedToken = data.data.external_search_token || '';
+            const currentProvider = detectProvider(savedUrl);
+
             const externalSearchUrlInput = document.getElementById('externalSearchUrlInput');
             if (externalSearchUrlInput) {
-                externalSearchUrlInput.value = data.data.external_search_url || '';
+                externalSearchUrlInput.value = savedUrl;
             }
             const externalSearchTokenInput = document.getElementById('externalSearchTokenInput');
             if (externalSearchTokenInput) {
-                externalSearchTokenInput.value = data.data.external_search_token || '';
+                externalSearchTokenInput.value = savedToken;
             }
+
+            const providerSelect = document.getElementById('externalSearchProviderSelect');
+            if (providerSelect) {
+                providerSelect.value = currentProvider;
+            }
+            updateProviderUI(currentProvider);
+            loadSearchProviders(currentProvider);
             const externalSearchAppendSwitch = document.getElementById('externalSearchAppendPlaylistSwitch');
             const externalSearchPlaylistPanel = document.getElementById('externalSearchPlaylistPanel');
             const externalSearchPlaylistSelect = document.getElementById('externalSearchPlaylistSelect');
@@ -469,6 +480,60 @@ function saveExtraMusicApiModels() {
 
 // ========== 外部搜索配置 ==========
 
+const KNOWN_PROVIDERS = {
+    ytdlp:    { url: '/api/v1/jsplugin/ytdlp/api/search/topone' },
+    subsonic: { url: '/api/v1/jsplugin/subsonic/api/search/topone' },
+};
+
+function detectProvider(url) {
+    if (!url) return 'custom';
+    for (const [id, p] of Object.entries(KNOWN_PROVIDERS)) {
+        if (url === p.url) return id;
+    }
+    return 'custom';
+}
+
+function updateProviderUI(providerId) {
+    const customPanel = document.getElementById('externalSearchCustomPanel');
+    if (customPanel) {
+        customPanel.style.display = providerId === 'custom' ? 'block' : 'none';
+    }
+    if (providerId !== 'custom' && KNOWN_PROVIDERS[providerId]) {
+        const urlInput = document.getElementById('externalSearchUrlInput');
+        if (urlInput) urlInput.value = KNOWN_PROVIDERS[providerId].url;
+        const tokenInput = document.getElementById('externalSearchTokenInput');
+        if (tokenInput) tokenInput.value = '';
+    }
+}
+
+function loadSearchProviders(currentProviderId) {
+    apiGet('/search-providers').then(data => {
+        const select = document.getElementById('externalSearchProviderSelect');
+        if (!select || !data.providers) return;
+
+        for (const p of data.providers) {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            if (!p.installed) {
+                opt.textContent = `${p.name}（未安装）`;
+                opt.disabled = true;
+            } else if (!p.active) {
+                opt.textContent = `${p.name}（未启用）`;
+                opt.disabled = true;
+            } else {
+                opt.textContent = p.name;
+            }
+            select.appendChild(opt);
+        }
+
+        if (currentProviderId && currentProviderId !== 'custom') {
+            select.value = currentProviderId;
+        }
+    }).catch(e => {
+        console.warn('Failed to load search providers:', e);
+    });
+}
+
 function updateExternalSearchConfig(enabled) {
     const panel = document.getElementById('externalSearchConfigPanel');
     if (panel) {
@@ -507,7 +572,6 @@ export function initExternalSearchUI() {
     const switchEl = document.getElementById('externalSearchSwitch');
     if (switchEl) {
         switchEl.addEventListener('change', function() {
-            // 尝试开启时检查语音口令依赖
             if (this.checked) {
                 const voiceSwitch = document.getElementById('voiceCommandSwitch');
                 if (voiceSwitch && !voiceSwitch.checked) {
@@ -517,6 +581,14 @@ export function initExternalSearchUI() {
                 }
             }
             updateExternalSearchConfig(this.checked);
+            saveExternalSearchConfig();
+        });
+    }
+
+    const providerSelect = document.getElementById('externalSearchProviderSelect');
+    if (providerSelect) {
+        providerSelect.addEventListener('change', function() {
+            updateProviderUI(this.value);
             saveExternalSearchConfig();
         });
     }
