@@ -65,7 +65,7 @@ export function registerConfigHandlers(
 
       let suggestedAddresses: string[] = [];
       try {
-        suggestedAddresses = await (songloft.plugin as any).getNetworkAddresses();
+        suggestedAddresses = await songloft.plugin.getNetworkAddresses();
       } catch {}
 
       return jsonResponse({
