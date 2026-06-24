@@ -198,7 +198,10 @@
                 <div class="card-body">
                     <div class="form-group">
                         <label class="form-label">服务器地址</label>
-                        <input type="text" class="text-field" id="serverHost" placeholder="例如: http://192.168.1.100:58091" aria-label="服务器地址">
+                        <select class="text-field" id="serverHostSelect" aria-label="选择服务器地址">
+                            <option value="" disabled selected>请选择服务器地址...</option>
+                        </select>
+                        <input type="text" class="text-field" id="serverHostCustom" placeholder="例如: http://192.168.1.100:58091" aria-label="自定义服务器地址" style="display:none;margin-top:8px">
                     </div>
                     <div class="server-host-warning" id="serverHostWarning" style="display:none">
                         <span class="material-symbols-outlined" style="font-size:16px;flex-shrink:0">warning</span>

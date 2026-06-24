@@ -198,42 +198,31 @@ export class VoiceEngine {
       return null;
     }
 
-    // 过滤已启用的口令并按优先级排序
     const enabledCommands = commands
       .filter(cmd => cmd.enabled)
       .map(cmd => ({
         cmd,
         priority: COMMAND_PRIORITY[cmd.type] ?? 99,
-      }))
-      .sort((a, b) => a.priority - b.priority);
+      }));
 
-    // 按优先级分组遍历，同优先级内取最长关键词匹配
-    // 避免短关键词（如"音量"）窃取长关键词（如"音量大一点"）的匹配
-    let currentPriority = -1;
+    // 跨优先级最长关键词匹配：遍历所有命令，取全局最长匹配，长度相同时高优先级优先。
+    // 防止短关键词（如"播放"）窃取更长关键词（如"播放歌单"）的匹配。
     let bestMatch: MatchResult | null = null;
     let bestKeywordLen = 0;
+    let bestPriority = 99;
 
     for (const item of enabledCommands) {
-      if (item.priority !== currentPriority) {
-        if (bestMatch) {
-          return bestMatch;
-        }
-        currentPriority = item.priority;
-        bestMatch = null;
-        bestKeywordLen = 0;
-      }
-
       for (const keyword of item.cmd.keywords) {
         const idx = query.indexOf(keyword);
         if (idx >= 0) {
           const kwLen = Array.from(keyword).length;
-          if (kwLen > bestKeywordLen) {
+          if (kwLen > bestKeywordLen || (kwLen === bestKeywordLen && item.priority < bestPriority)) {
             bestKeywordLen = kwLen;
-            const argument = query.slice(idx + keyword.length).trim();
+            bestPriority = item.priority;
             bestMatch = {
               command: item.cmd,
               keyword,
-              argument,
+              argument: query.slice(idx + keyword.length).trim(),
             };
           }
         }
@@ -712,7 +701,9 @@ export class VoiceEngine {
   private async smartResume(pm: import('../player/manager').PlaylistManager, accountId: string, deviceId: string): Promise<void> {
     if (!pm.isPlaying() || this.resumeCancelled) return;
 
-    const maxWaitMs = 30000;
+    const config = await this.configManager.getConfig();
+    const timeoutSec = Math.max(5, Math.min(120, config.smart_resume_timeout ?? 30));
+    const maxWaitMs = timeoutSec * 1000;
     const pollInterval = 2000;
     const startTime = Date.now();
     let deviceBecameIdle = false;

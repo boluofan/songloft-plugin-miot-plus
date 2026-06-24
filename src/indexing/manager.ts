@@ -238,12 +238,17 @@ function scoreSongMatch(query: string, songTitle: string, songArtist: string): n
  * 从 Songloft 宿主API获取歌曲/歌单数据，建立内存索引，提供模糊搜索
  */
 export class IndexingManager {
+  private configManager: import('../config/manager').ConfigManager | null;
   private songs: IndexedSong[] = [];
   private playlists: IndexedPlaylist[] = [];
   private playlistSongsCache: Map<number, Array<{ id: number; title: string; artist: string }>> = new Map();
   private lastRefreshTime: number = 0;
   private isRefreshing: boolean = false;
   private indexReady: boolean = false;
+
+  constructor(configManager?: import('../config/manager').ConfigManager) {
+    this.configManager = configManager ?? null;
+  }
 
   /**
    * 刷新索引（从宿主API获取最新数据）
@@ -260,7 +265,14 @@ export class IndexingManager {
       const rawPlaylists = (await songloft.playlists.list()) ?? [];
 
       // 2. 获取歌曲列表（桥接直接返回数组）
-      const rawSongs = (await songloft.songs.list({ limit: 10000 })) ?? [];
+      let songLimit = 10000;
+      if (this.configManager) {
+        try {
+          const cfg = await this.configManager.getConfig();
+          songLimit = Math.max(1000, Math.min(100000, cfg.max_song_index ?? 10000));
+        } catch {}
+      }
+      const rawSongs = (await songloft.songs.list({ limit: songLimit })) ?? [];
 
       // 3. 构建歌单索引
       const newPlaylists: IndexedPlaylist[] = rawPlaylists.map(pl => ({

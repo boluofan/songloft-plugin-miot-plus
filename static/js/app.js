@@ -43,7 +43,7 @@ import {
     stopPlaylist
 } from './playback.js';
 import { initDialogs } from './modal.js';
-import { autoFillServerHost, saveConfig, loadConfig, initConversationUI, initVoiceCommandUI, initTimezoneUI, initForceMp3UI, initIndicatorLightUI, initExtraMusicApiModelsUI, initAIConfigUI, initExternalSearchUI, initExternalSearchSpecUI, initInterruptBroadcastUI } from './config.js';
+import { autoFillServerHost, saveConfig, loadConfig, initServerHostUI, initConversationUI, initVoiceCommandUI, initTimezoneUI, initForceMp3UI, initIndicatorLightUI, initExtraMusicApiModelsUI, initAIConfigUI, initExternalSearchUI, initExternalSearchSpecUI, initInterruptBroadcastUI } from './config.js';
 import { addAccount, addAccountWithToken, deleteAccount, toggleDeviceManagement, loadAccounts, reLoginAccount } from './account.js';
 import { submitCaptcha, openVerifyUrl, submitVerifyCode, startQRCodeLogin } from './auth.js';
 import { Tracely } from './tracely-sdk.js';
@@ -468,6 +468,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }).catch(error => {
         console.error('加载设备列表失败', error);
     });
+
+    // 初始化服务器地址下拉选择 UI
+    initServerHostUI();
 
     // 初始化音频格式开关 UI
     initForceMp3UI();

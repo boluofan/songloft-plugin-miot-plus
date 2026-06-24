@@ -97,6 +97,9 @@ export interface PluginConfig {
   indicator_light_enabled?: boolean;
   interrupt_tts_hint_enabled: boolean;
   interrupt_tts_hint_text: string;
+  conversation_poll_interval: number;
+  smart_resume_timeout: number;
+  max_song_index: number;
   ai_config: AIConfig;
 }
 

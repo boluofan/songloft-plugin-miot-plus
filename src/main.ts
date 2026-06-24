@@ -46,7 +46,7 @@ async function onInit(): Promise<void> {
   accountManager = new AccountManager(configManager);
   await accountManager.init();
 
-  indexingManager = new IndexingManager();
+  indexingManager = new IndexingManager(configManager);
   authService = new AuthService(configManager, accountManager);
   minaService = new MinaService(accountManager, configManager);
   playlistManagerMap = new PlaylistManagerMap(minaService, configManager);

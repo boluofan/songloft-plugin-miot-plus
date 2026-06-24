@@ -62,6 +62,12 @@ export function registerConfigHandlers(
     try {
       const config = await configManager.getConfig();
       const aiConfig = await configManager.getAIConfig();
+
+      let suggestedAddresses: string[] = [];
+      try {
+        suggestedAddresses = await (songloft.plugin as any).getNetworkAddresses();
+      } catch {}
+
       return jsonResponse({
         success: true,
         data: {
@@ -79,7 +85,11 @@ export function registerConfigHandlers(
           indicator_light_enabled: !!config.indicator_light_enabled,
           interrupt_tts_hint_enabled: !!config.interrupt_tts_hint_enabled,
           interrupt_tts_hint_text: config.interrupt_tts_hint_text || '正在搜索，请稍候',
+          conversation_poll_interval: config.conversation_poll_interval ?? 1,
+          smart_resume_timeout: config.smart_resume_timeout ?? 30,
+          max_song_index: config.max_song_index ?? 10000,
           server_host_status: getServerHostStatus(config.server_host),
+          suggested_addresses: suggestedAddresses,
           ai_config: aiConfig,
         },
       });
@@ -170,6 +180,26 @@ export function registerConfigHandlers(
         config.interrupt_tts_hint_text = typeof body.interrupt_tts_hint_text === 'string'
           ? body.interrupt_tts_hint_text.trim()
           : '正在搜索，请稍候';
+      }
+
+      // 更新 conversation_poll_interval（联动 Monitor 重启）
+      if (body.conversation_poll_interval !== undefined) {
+        const val = Math.max(1, Math.min(30, Number(body.conversation_poll_interval) || 1));
+        config.conversation_poll_interval = val;
+        if (config.conversation_monitor_enabled) {
+          conversationMonitor.stop();
+          conversationMonitor.start();
+        }
+      }
+
+      // 更新 smart_resume_timeout
+      if (body.smart_resume_timeout !== undefined) {
+        config.smart_resume_timeout = Math.max(5, Math.min(120, Number(body.smart_resume_timeout) || 30));
+      }
+
+      // 更新 max_song_index
+      if (body.max_song_index !== undefined) {
+        config.max_song_index = Math.max(1000, Math.min(100000, Number(body.max_song_index) || 10000));
       }
 
       // 更新 extra_music_api_models

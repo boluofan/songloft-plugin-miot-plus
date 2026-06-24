@@ -3,6 +3,16 @@
 
 import { getHostBaseUrl } from '../utils/http';
 
+function isLoopbackUrl(url: string): boolean {
+  const protoIdx = url.indexOf('://');
+  if (protoIdx < 0) return false;
+  const rest = url.slice(protoIdx + 3);
+  const slashIdx = rest.indexOf('/');
+  const colonIdx = rest.indexOf(':');
+  const host = rest.slice(0, slashIdx >= 0 ? Math.min(slashIdx, colonIdx >= 0 ? colonIdx : slashIdx) : (colonIdx >= 0 ? colonIdx : undefined)).toLowerCase();
+  return host === 'localhost' || host.startsWith('127.') || host === '::1';
+}
+
 /**
  * URL构造器 - 构造歌曲和封面的播放URL
  */
@@ -40,6 +50,11 @@ export class URLBuilder {
     if (options?.forceMp3) {
       url += '&format=mp3';
     }
+
+    if (isLoopbackUrl(url)) {
+      songloft.log.warn('[URLBuilder] 播放 URL 包含回环地址，MIoT 音箱无法访问。请在插件配置中设置正确的局域网地址（如 http://192.168.x.x:58091）');
+    }
+
     return url;
   }
 }

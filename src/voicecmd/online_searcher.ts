@@ -290,7 +290,12 @@ export class OnlineSearcher {
    */
   private async findExistingSong(title: string, artist: string): Promise<{ id: number; url: string } | null> {
     try {
-      const allSongs = await songloft.songs.list({ limit: 10000 });
+      let songLimit = 10000;
+      try {
+        const cfg = await this.configManager.getConfig();
+        songLimit = Math.max(1000, Math.min(100000, cfg.max_song_index ?? 10000));
+      } catch {}
+      const allSongs = await songloft.songs.list({ limit: songLimit });
       const match = allSongs.find(s =>
         s.title === title &&
         s.artist === artist &&

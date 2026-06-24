@@ -43,6 +43,9 @@ function defaultPluginConfig(): PluginConfig {
     indicator_light_enabled: true,
     interrupt_tts_hint_enabled: false,
     interrupt_tts_hint_text: '正在搜索，请稍候',
+    conversation_poll_interval: 1,
+    smart_resume_timeout: 30,
+    max_song_index: 10000,
     ai_config: defaultAIConfig(),
   };
 }

@@ -12,14 +12,17 @@ let lastConversationTimestamp = 0;
 
 /**
  * 自动填充主程序地址
- * 使用当前页面的基础 URL 作为主程序地址
+ * 使用当前页面的基础 URL 作为主程序地址，切换到自定义模式
  */
 export function autoFillServerHost() {
-    const input = document.getElementById('serverHost');
-    if (!input) return;
+    const select = document.getElementById('serverHostSelect');
+    const customInput = document.getElementById('serverHostCustom');
+    if (!select || !customInput) return;
 
     const currentUrl = window.location.origin;
-    input.value = currentUrl;
+    select.value = '__custom__';
+    customInput.value = currentUrl;
+    customInput.style.display = '';
     showSnackbar('已自动填充：' + currentUrl, 'success');
 }
 
@@ -30,10 +33,11 @@ export function autoFillServerHost() {
 export function loadConfig() {
     apiGet('/config').then(data => {
         if (data.success && data.data) {
-            const serverHostInput = document.getElementById('serverHost');
-            if (serverHostInput) {
-                serverHostInput.value = data.data.server_host || '';
-            }
+            // 填充服务器地址下拉列表
+            populateServerHostSelect(
+                data.data.suggested_addresses || [],
+                data.data.server_host || ''
+            );
 
             // 根据 server_host_status 显示/隐藏警告
             updateServerHostWarning(data.data.server_host_status);
@@ -159,13 +163,19 @@ export function loadConfig() {
  * 保存主程序地址等配置到服务器
  */
 export function saveConfig() {
-    const serverHostInput = document.getElementById('serverHost');
-    let serverHost = serverHostInput ? serverHostInput.value.trim() : '';
+    const select = document.getElementById('serverHostSelect');
+    const customInput = document.getElementById('serverHostCustom');
+    let serverHost = '';
+    if (select && select.value === '__custom__') {
+        serverHost = customInput ? customInput.value.trim() : '';
+    } else if (select) {
+        serverHost = select.value || '';
+    }
 
     if (serverHost && !serverHost.startsWith('http://') && !serverHost.startsWith('https://')) {
         serverHost = window.location.protocol + '//' + serverHost;
-        if (serverHostInput) {
-            serverHostInput.value = serverHost;
+        if (customInput && select.value === '__custom__') {
+            customInput.value = serverHost;
         }
     }
 
@@ -197,6 +207,75 @@ export function saveConfig() {
                 window.tracely.reportEvent('api_error', { path: '/config', error: error.message });
             }
         });
+}
+
+// ========== 服务器地址下拉选择 ==========
+
+/**
+ * 填充服务器地址下拉列表
+ * @param {string[]} addresses - 检测到的局域网地址列表
+ * @param {string} currentHost - 当前配置的服务器地址
+ */
+function populateServerHostSelect(addresses, currentHost) {
+    const select = document.getElementById('serverHostSelect');
+    const customInput = document.getElementById('serverHostCustom');
+    if (!select) return;
+
+    select.innerHTML = '';
+
+    // placeholder
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '请选择服务器地址...';
+    placeholder.disabled = true;
+    select.appendChild(placeholder);
+
+    // 检测到的地址
+    for (const addr of addresses) {
+        const opt = document.createElement('option');
+        opt.value = addr;
+        opt.textContent = addr;
+        select.appendChild(opt);
+    }
+
+    // 自定义选项
+    const customOpt = document.createElement('option');
+    customOpt.value = '__custom__';
+    customOpt.textContent = '自定义地址...';
+    select.appendChild(customOpt);
+
+    // 设置当前值
+    if (!currentHost) {
+        select.value = '';
+        if (customInput) customInput.style.display = 'none';
+    } else if (addresses.includes(currentHost)) {
+        select.value = currentHost;
+        if (customInput) customInput.style.display = 'none';
+    } else {
+        select.value = '__custom__';
+        if (customInput) {
+            customInput.value = currentHost;
+            customInput.style.display = '';
+        }
+    }
+}
+
+/**
+ * 初始化服务器地址下拉选择 UI 事件
+ */
+export function initServerHostUI() {
+    const select = document.getElementById('serverHostSelect');
+    const customInput = document.getElementById('serverHostCustom');
+    if (!select || !customInput) return;
+
+    select.addEventListener('change', () => {
+        if (select.value === '__custom__') {
+            customInput.style.display = '';
+            customInput.focus();
+        } else {
+            customInput.style.display = 'none';
+        }
+    });
 }
 
 // ========== 服务器地址警告 ==========
