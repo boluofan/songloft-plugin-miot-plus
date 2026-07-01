@@ -54,7 +54,7 @@ export function getDefaultVoiceCommands(): VoiceCommand[] {
     { type: 'set_volume', keywords: ['小声一点', '声音小一点', '音量小一点'], param: 'down', enabled: true },
     { type: 'next', keywords: ['下一首', '切歌', '换一首', '下一曲'], enabled: true },
     { type: 'previous', keywords: ['上一首', '上一曲'], enabled: true },
-    { type: 'stop', keywords: ['停止播放', '停止', '别播了', '关掉音乐', '关机'], enabled: true },
+    { type: 'stop', keywords: ['停止播放', '停止', '别播了', '关掉音乐', '关机', '关闭'], enabled: true },
   ];
 }
 
