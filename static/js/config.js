@@ -129,10 +129,6 @@ export function loadConfig() {
                 externalSearchTimeoutInput.value = data.data.external_search_timeout ?? 6;
             }
 
-            const providerSelect = document.getElementById('externalSearchProviderSelect');
-            if (providerSelect) {
-                providerSelect.value = currentProvider;
-            }
             updateProviderUI(currentProvider);
             loadSearchProviders(currentProvider);
             const externalSearchAppendSwitch = document.getElementById('externalSearchAppendPlaylistSwitch');
@@ -560,31 +556,41 @@ function updateProviderUI(providerId) {
     }
 }
 
-function loadSearchProviders(currentProviderId) {
+function renderSearchProviders(select, providers, currentProviderId) {
+    while (select.options.length > 1) {
+        select.removeChild(select.lastChild);
+    }
+
+    for (const p of providers) {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        if (!p.installed) {
+            opt.textContent = `${p.name}（未安装）`;
+            opt.disabled = true;
+        } else if (!p.active) {
+            opt.textContent = `${p.name}（未启用）`;
+            opt.disabled = true;
+        } else {
+            opt.textContent = p.name;
+        }
+        select.appendChild(opt);
+    }
+
+    if (currentProviderId && currentProviderId !== 'custom') {
+        select.value = currentProviderId;
+    }
+}
+
+function loadSearchProviders(currentProviderId, isRetry) {
     apiGet('/search-providers').then(data => {
         const select = document.getElementById('externalSearchProviderSelect');
         if (!select || !data.providers) return;
-
-        for (const p of data.providers) {
-            const opt = document.createElement('option');
-            opt.value = p.id;
-            if (!p.installed) {
-                opt.textContent = `${p.name}（未安装）`;
-                opt.disabled = true;
-            } else if (!p.active) {
-                opt.textContent = `${p.name}（未启用）`;
-                opt.disabled = true;
-            } else {
-                opt.textContent = p.name;
-            }
-            select.appendChild(opt);
-        }
-
-        if (currentProviderId && currentProviderId !== 'custom') {
-            select.value = currentProviderId;
-        }
+        renderSearchProviders(select, data.providers, currentProviderId);
     }).catch(e => {
         console.warn('Failed to load search providers:', e);
+        if (!isRetry) {
+            setTimeout(() => loadSearchProviders(currentProviderId, true), 1000);
+        }
     });
 }
 
