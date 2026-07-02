@@ -297,6 +297,31 @@ export class TaskExecutor {
     const pm = await this.playlistManagerMap.getOrCreate(target.accountId, target.deviceId);
     const ok = await pm.play(playlist.id, startIndex, playMode);
     if (!ok) {
+      // 歌单 ID 已失效（扫描后 auto-create 歌单 ID 变化）：刷新索引后重试一次
+      if (pm.isLastPlayNotFound()) {
+        songloft.log.warn(`[TaskExecutor] 歌单 ID ${playlist.id} 已失效，刷新索引后重试`);
+        await this.indexingManager.refresh();
+        // 用已匹配到的规范歌单名精确重查（比原始参数更稳，能命中改了 ID 的同名歌单）
+        const newPlaylist = this.indexingManager.findPlaylistByName(playlist.name);
+        if (!newPlaylist) {
+          throw new Error(`刷新索引后仍未找到歌单: ${playlistName}`);
+        }
+        let retryIndex = 0;
+        if (withSong && params.song_name) {
+          const result = await this.indexingManager.findSongInPlaylist(newPlaylist.id, params.song_name);
+          if (result.found) {
+            retryIndex = result.index;
+          }
+        }
+        const retryOk = await pm.play(newPlaylist.id, retryIndex, playMode);
+        if (!retryOk) {
+          throw new Error(`播放歌单失败(重试后): ${newPlaylist.name}`);
+        }
+        if (withSong && params.song_name) {
+          return `播放歌单「${newPlaylist.name}」（从「${params.song_name}」开始）成功`;
+        }
+        return `播放歌单「${newPlaylist.name}」成功`;
+      }
       throw new Error(`播放歌单失败: ${playlist.name}`);
     }
 

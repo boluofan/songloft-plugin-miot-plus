@@ -64,6 +64,7 @@ export class PlaylistManager {
   private playStartTimeMs: number = 0;  // 当前歌曲开始播放的时间戳(ms)
   private randomPlayed: Set<number> = new Set(); // 随机模式已播放索引
   private voiceSuspendedAt: number = 0; // suspendForVoiceInteraction 首次调用时间戳
+  private _lastLoadNotFound: boolean = false; // 上次 loadPlaylistSongs 失败是否因歌单不存在(ID 过期)
 
   constructor(
     accountId: string,
@@ -91,6 +92,7 @@ export class PlaylistManager {
     this.stopCheckTimer();
     this.state = 'idle';
     this.playStartTimeMs = 0;
+    this._lastLoadNotFound = false;
 
     // 加载歌单歌曲
     const loaded = await this.loadPlaylistSongs(playlistId);
@@ -447,12 +449,37 @@ export class PlaylistManager {
     };
 
     const ok = await attempt(false);
-    if (!ok) {
-      songloft.log.warn(`[PlaylistManager] loadPlaylistSongs empty or failed, retrying in 500ms playlistId=${playlistId}`);
-      await new Promise(r => setTimeout(r, 500));
-      return attempt(true);
+    if (ok) {
+      return true;
     }
-    return true;
+
+    songloft.log.warn(`[PlaylistManager] loadPlaylistSongs empty or failed, retrying in 500ms playlistId=${playlistId}`);
+    await new Promise(r => setTimeout(r, 500));
+    const retryOk = await attempt(true);
+    if (retryOk) {
+      return true;
+    }
+
+    // retry 后仍为空/失败：检测歌单是否真的不存在（扫描后 auto-create 歌单 ID 变化会导致旧 ID 失效）。
+    // 区分「歌单不存在(ID 过期)」与「歌单存在但为空」，供上层决定是否刷新索引重试。
+    try {
+      const pl = await songloft.playlists.getById(playlistId);
+      if (!pl) {
+        this._lastLoadNotFound = true;
+        songloft.log.warn(`[PlaylistManager] playlist ${playlistId} not found (stale ID), signaling caller to refresh index`);
+      }
+    } catch (e) {
+      songloft.log.warn(`[PlaylistManager] getById check failed playlistId=${playlistId}: ${String(e)}`);
+    }
+    return false;
+  }
+
+  /**
+   * 上次播放失败是否因歌单 ID 已失效（歌单不存在）。
+   * 用于上层在扫描导致 auto-create 歌单 ID 变化后，刷新索引并重试。
+   */
+  isLastPlayNotFound(): boolean {
+    return this._lastLoadNotFound;
   }
 
   /**

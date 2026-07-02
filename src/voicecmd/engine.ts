@@ -416,9 +416,28 @@ export class VoiceEngine {
     const ok = await pm.play(matchedPlaylist.id, startIndex, playMode);
     if (ok) {
       songloft.log.info(`[VoiceEngine] Play playlist success: ${matchedPlaylist.name} index=${startIndex} mode=${playMode}`);
-    } else {
-      songloft.log.error(`[VoiceEngine] Play playlist failed: ${matchedPlaylist.name}`);
+      return;
     }
+
+    // 播放失败且因歌单 ID 已失效：刷新索引后按名字重新查找并重试一次
+    if (pm.isLastPlayNotFound()) {
+      songloft.log.warn(`[VoiceEngine] Stale playlist ID ${matchedPlaylist.id} in playPlaylist, refreshing index and retrying`);
+      await this.indexingManager.refresh();
+      // 用已匹配到的规范歌单名精确重查（比原始模糊查询更稳，能命中改了 ID 的同名歌单）
+      const newPlaylist = this.indexingManager.findPlaylistByName(matchedPlaylist.name);
+      if (newPlaylist) {
+        songloft.log.info(`[VoiceEngine] Re-matched playlist after refresh: ${newPlaylist.name} (id=${newPlaylist.id})`);
+        const retryOk = await pm.play(newPlaylist.id, 0, playMode);
+        if (retryOk) {
+          songloft.log.info(`[VoiceEngine] Retry play playlist success: ${newPlaylist.name}`);
+          return;
+        }
+      }
+      songloft.log.error(`[VoiceEngine] Retry play playlist failed after index refresh: ${playlistName}`);
+      return;
+    }
+
+    songloft.log.error(`[VoiceEngine] Play playlist failed: ${matchedPlaylist.name}`);
   }
 
   /**
@@ -503,9 +522,27 @@ export class VoiceEngine {
     const ok = await pm.play(loc.playlistId, loc.songIndex, playMode);
     if (ok) {
       songloft.log.info(`[VoiceEngine] Play song success: ${loc.songTitle} playlist="${loc.playlistName}" index=${loc.songIndex} mode=${playMode}`);
-    } else {
-      songloft.log.error(`[VoiceEngine] Play song failed: ${loc.songTitle}`);
+      return;
     }
+
+    // 播放失败且因歌单 ID 已失效（扫描后 auto-create 歌单 ID 变化）：刷新索引后重试一次
+    if (pm.isLastPlayNotFound()) {
+      songloft.log.warn(`[VoiceEngine] Stale playlist ID ${loc.playlistId}, refreshing index and retrying`);
+      await this.indexingManager.refresh();
+      const newLoc = await this.indexingManager.findSongByName(songName);
+      if (newLoc) {
+        songloft.log.info(`[VoiceEngine] Re-matched after refresh: ${newLoc.songTitle} playlist="${newLoc.playlistName}" playlistId=${newLoc.playlistId} songIndex=${newLoc.songIndex}`);
+        const retryOk = await pm.play(newLoc.playlistId, newLoc.songIndex, playMode);
+        if (retryOk) {
+          songloft.log.info(`[VoiceEngine] Retry play song success: ${newLoc.songTitle}`);
+          return;
+        }
+      }
+      songloft.log.error(`[VoiceEngine] Retry play song failed after index refresh: ${songName}`);
+      return;
+    }
+
+    songloft.log.error(`[VoiceEngine] Play song failed: ${loc.songTitle}`);
   }
 
   /**
