@@ -294,6 +294,7 @@ export function registerConfigHandlers(
   router.get('/search-providers', async (_req: HTTPRequest) => {
     const knownProviders = [
       { id: 'ytdlp', name: 'yt-dlp', entryPath: 'ytdlp', searchPath: '/api/search/topone' },
+      { id: 'bili', name: '哔哩音乐', entryPath: 'bili', searchPath: '/api/search/topone' },
       { id: 'subsonic', name: 'Subsonic', entryPath: 'subsonic', searchPath: '/api/search/topone' },
     ];
 

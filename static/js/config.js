@@ -604,6 +604,7 @@ function saveExtraMusicApiModels() {
 
 const KNOWN_PROVIDERS = {
     ytdlp:    { url: '/api/v1/jsplugin/ytdlp/api/search/topone' },
+    bili:     { url: '/api/v1/jsplugin/bili/api/search/topone' },
     subsonic: { url: '/api/v1/jsplugin/subsonic/api/search/topone' },
 };
 
