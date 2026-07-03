@@ -71,6 +71,23 @@ function defaultAIConfig(): AIConfig {
  */
 export class ConfigManager {
 
+  // ===== 热路径内存缓存 =====
+  // 仅缓存每秒轮询 / 每条语音消息都会读的 config 与 accounts 两个 key，
+  // 其余 key 不缓存（非热路径，避免过度设计）。
+  //
+  // 设计要点：
+  // - 缓存 in-flight Promise 而非最终值，防止 async 让出期间并发读触发的
+  //   「惊群」重复 storage.get。load 内部有 try/catch 不会 reject，不存在
+  //   缓存到 rejected Promise 的风险。
+  // - 写穿透：saveConfig/saveAccounts 写盘后直接把新值塞回缓存，写后读即新值。
+  //   所有账号写入（add/update/remove/updateDevice/setLastSelectedDevice）
+  //   最终都经 saveAccounts，自动失效。
+  // - 引用约定：getAccounts 返回缓存数组引用。现有调用方模式均为
+  //   「get → 原地改 → saveAccounts 写回」，改的就是要写回的数据，语义正确。
+  //   getConfig 每次返回浅合并的新对象，不暴露缓存引用。
+  private accountsCache: Promise<AccountConfig[]> | null = null;
+  private configCache: Promise<Partial<PluginConfig>> | null = null;
+
   // ===== 通用存储读写 =====
 
   /** 从storage读取JSON数据，不存在则返回默认值 */
@@ -95,25 +112,33 @@ export class ConfigManager {
 
   /** 获取插件全局配置（与默认值合并，确保新增字段有默认值） */
   async getConfig(): Promise<PluginConfig> {
-    const stored = await this.load<Partial<PluginConfig>>(STORAGE_KEY_CONFIG, {});
+    if (this.configCache === null) {
+      this.configCache = this.load<Partial<PluginConfig>>(STORAGE_KEY_CONFIG, {});
+    }
+    const stored = await this.configCache;
     return { ...defaultPluginConfig(), ...stored };
   }
 
   /** 保存插件全局配置 */
   async saveConfig(config: PluginConfig): Promise<void> {
     await this.save(STORAGE_KEY_CONFIG, config);
+    this.configCache = Promise.resolve(config);
   }
 
   // ===== 账号管理（存储层） =====
 
   /** 获取所有账号配置 */
   async getAccounts(): Promise<AccountConfig[]> {
-    return this.load<AccountConfig[]>(STORAGE_KEY_ACCOUNTS, []);
+    if (this.accountsCache === null) {
+      this.accountsCache = this.load<AccountConfig[]>(STORAGE_KEY_ACCOUNTS, []);
+    }
+    return this.accountsCache;
   }
 
   /** 保存所有账号配置 */
   async saveAccounts(accounts: AccountConfig[]): Promise<void> {
     await this.save(STORAGE_KEY_ACCOUNTS, accounts);
+    this.accountsCache = Promise.resolve(accounts);
   }
 
   /** 按ID获取单个账号配置 */

@@ -30,6 +30,15 @@ export interface IndexedPlaylist {
   songCount: number;
 }
 
+/** 歌单内歌曲缓存条目（预建小写字段供搜歌热路径复用，避免逐首 toLowerCase） */
+interface CachedPlaylistSong {
+  id: number;
+  title: string;
+  artist: string;
+  titleLower: string;
+  artistLower: string;
+}
+
 /** 索引状态（字段名使用蛇形式，与 WASM 版保持一致） */
 export interface IndexStatus {
   ready: boolean;
@@ -48,12 +57,10 @@ interface ScoredResult<T> {
 // ===== 模糊搜索算法 =====
 
 /**
- * 编辑距离（Levenshtein Distance），支持 Unicode
- * 使用两行滚动数组优化空间
+ * 编辑距离核心：接收已 Array.from 的 rune 数组，使用两行滚动数组优化空间。
+ * 热路径调用方（歌曲搜索）预先拆好 rune 数组复用，避免每次比较重复 Array.from。
  */
-function levenshteinDistance(a: string, b: string): number {
-  const ra = Array.from(a);
-  const rb = Array.from(b);
+function levenshteinRunes(ra: string[], rb: string[]): number {
   const la = ra.length;
   const lb = rb.length;
 
@@ -87,16 +94,16 @@ function levenshteinDistance(a: string, b: string): number {
 }
 
 /**
- * 计算两个字符串的相似度 (0.0 ~ 1.0)
+ * 计算两个已小写化字符串的相似度 (0.0 ~ 1.0)
  * similarity = 1 - distance / max(len(a), len(b))
+ * 各 Array.from 一次并复用给编辑距离，避免原实现里 toLowerCase/Array.from 各 4 次。
  */
-function similarity(a: string, b: string): number {
-  const al = Array.from(a.toLowerCase());
-  const bl = Array.from(b.toLowerCase());
-  const maxLen = Math.max(al.length, bl.length);
+function similarityLower(aLower: string, bLower: string): number {
+  const ra = Array.from(aLower);
+  const rb = Array.from(bLower);
+  const maxLen = Math.max(ra.length, rb.length);
   if (maxLen === 0) return 1.0;
-  const dist = levenshteinDistance(a.toLowerCase(), b.toLowerCase());
-  return 1.0 - dist / maxLen;
+  return 1.0 - levenshteinRunes(ra, rb) / maxLen;
 }
 
 /**
@@ -110,11 +117,8 @@ function similarity(a: string, b: string): number {
  *
  * @returns 得分，0 表示不匹配
  */
-function fuzzyScore(keyword: string, candidate: string): number {
-  if (!keyword || !candidate) return 0;
-
-  const keywordLower = keyword.toLowerCase();
-  const candidateLower = candidate.toLowerCase();
+function fuzzyScoreLower(keywordLower: string, candidateLower: string): number {
+  if (!keywordLower || !candidateLower) return 0;
 
   // 第一级：精确匹配
   if (candidateLower === keywordLower) {
@@ -123,23 +127,29 @@ function fuzzyScore(keyword: string, candidate: string): number {
 
   // 第二级：包含匹配
   if (candidateLower.includes(keywordLower)) {
-    const runeLen = Array.from(candidate).length;
+    const runeLen = Array.from(candidateLower).length;
     return runeLen > 0 ? 50.0 + 1.0 / runeLen : 50.0;
   }
 
   // 第二级变体：关键词包含候选项
   if (keywordLower.includes(candidateLower)) {
-    const runeLen = Array.from(candidate).length;
+    const runeLen = Array.from(candidateLower).length;
     return runeLen > 0 ? 40.0 + 1.0 / runeLen : 40.0;
   }
 
   // 第三级：编辑距离模糊匹配
-  const sim = similarity(keyword, candidate);
+  const sim = similarityLower(keywordLower, candidateLower);
   if (sim > 0.5) {
     return sim * 30.0;
   }
 
   return 0;
+}
+
+/** 薄包装：接收原始大小写字符串，供 playlist 等非热路径使用。 */
+function fuzzyScore(keyword: string, candidate: string): number {
+  if (!keyword || !candidate) return 0;
+  return fuzzyScoreLower(keyword.toLowerCase(), candidate.toLowerCase());
 }
 
 /**
@@ -214,17 +224,18 @@ const MIN_MATCH_SCORE = 40;
  * 当查询词仅匹配歌手而标题完全未命中，且查询词明显长于歌手名时
  * （说明用户同时指定了歌名），判定为未命中，返回 0 分。
  */
-function scoreSongMatch(query: string, songTitle: string, songArtist: string): number {
-  const titleScore = fuzzyScore(query, songTitle);
-  const artistScore = fuzzyScore(query, songArtist);
+function scoreSongMatchLower(queryLower: string, titleLower: string, artistLower: string): number {
+  const titleScore = fuzzyScoreLower(queryLower, titleLower);
+  const artistScore = fuzzyScoreLower(queryLower, artistLower);
 
   if (titleScore >= MIN_MATCH_SCORE) {
     return titleScore;
   }
 
   if (artistScore >= MIN_MATCH_SCORE && titleScore === 0) {
-    const queryLen = Array.from(query).length;
-    const artistLen = Array.from(songArtist).length;
+    // toLowerCase 不改变 CJK/常见字符的 rune 数，故用 lower 版长度等价于原始长度。
+    const queryLen = Array.from(queryLower).length;
+    const artistLen = Array.from(artistLower).length;
     if (queryLen > artistLen + 1) {
       return 0;
     }
@@ -241,7 +252,7 @@ export class IndexingManager {
   private configManager: import('../config/manager').ConfigManager | null;
   private songs: IndexedSong[] = [];
   private playlists: IndexedPlaylist[] = [];
-  private playlistSongsCache: Map<number, Array<{ id: number; title: string; artist: string }>> = new Map();
+  private playlistSongsCache: Map<number, CachedPlaylistSong[]> = new Map();
   private lastRefreshTime: number = 0;
   private isRefreshing: boolean = false;
   private indexReady: boolean = false;
@@ -292,21 +303,28 @@ export class IndexingManager {
         artistLower: (song.artist ?? '').toLowerCase(),
       }));
 
-      // 5. 预加载歌单歌曲（避免搜歌时逐个桥接调用）
-      const newPlaylistSongsCache = new Map<number, Array<{ id: number; title: string; artist: string }>>();
+      // 5. 预加载歌单歌曲（避免搜歌时逐个桥接调用）。
+      //    并发拉取所有歌单，单歌单失败仅 warn 不中断整体。
+      const newPlaylistSongsCache = new Map<number, CachedPlaylistSong[]>();
       const plSongsStart = Date.now();
-      for (const pl of newPlaylists) {
+      await Promise.all(newPlaylists.map(async pl => {
         try {
           const plSongs = (await songloft.playlists.getSongs(pl.id, { limit: 100000 })) ?? [];
-          newPlaylistSongsCache.set(pl.id, plSongs.map(s => ({
-            id: s.id,
-            title: (s as any).title ?? '',
-            artist: (s as any).artist ?? '',
-          })));
+          newPlaylistSongsCache.set(pl.id, plSongs.map(s => {
+            const title = (s as any).title ?? '';
+            const artist = (s as any).artist ?? '';
+            return {
+              id: s.id,
+              title,
+              artist,
+              titleLower: title.toLowerCase(),
+              artistLower: artist.toLowerCase(),
+            };
+          }));
         } catch (e) {
           songloft.log.warn(`索引刷新: 获取歌单歌曲失败 playlist_id=${pl.id}: ${e instanceof Error ? e.message : String(e)}`);
         }
-      }
+      }));
       const plSongsMs = Date.now() - plSongsStart;
 
       // 6. 更新索引
@@ -366,11 +384,11 @@ export class IndexingManager {
   searchSong(query: string): IndexedSong[] {
     if (!query || !query.trim()) return [];
 
-    const queryTrimmed = query.trim();
+    const queryLower = query.trim().toLowerCase();
     const scored: ScoredResult<IndexedSong>[] = [];
 
     for (const song of this.songs) {
-      const score = scoreSongMatch(queryTrimmed, song.title, song.artist);
+      const score = scoreSongMatchLower(queryLower, song.titleLower, song.artistLower);
       if (score > 0) {
         scored.push({ item: song, score });
       }
@@ -453,6 +471,8 @@ export class IndexingManager {
 
     const startMs = Date.now();
 
+    const queryLower = songName.toLowerCase();
+
     // 1. 用内存歌曲索引模糊搜索匹配歌曲（按评分降序）
     const matchedSongs = this.searchSong(songName);
     const matchedSongIds = new Set(matchedSongs.map(s => s.id));
@@ -483,7 +503,7 @@ export class IndexingManager {
         }
 
         // b) 直接模糊评分（联合标题+歌手）
-        const score = scoreSongMatch(songName, s.title, s.artist);
+        const score = scoreSongMatchLower(queryLower, s.titleLower, s.artistLower);
         if (score >= MIN_MATCH_SCORE && score > bestDirectScore) {
           bestDirectScore = score;
           bestDirectLoc = {
@@ -511,7 +531,7 @@ export class IndexingManager {
     // 4a. 全局索引有高质量命中但不在任何歌单中 → 返回 null 让调用方走独立歌曲路径
     if (matchedSongs.length > 0) {
       const bestGlobal = matchedSongs[0];
-      const bestGlobalScore = scoreSongMatch(songName, bestGlobal.title, bestGlobal.artist);
+      const bestGlobalScore = scoreSongMatchLower(queryLower, bestGlobal.titleLower, bestGlobal.artistLower);
       if (bestGlobalScore >= MIN_MATCH_SCORE) {
         songloft.log.info(
           `[IndexingManager] findSongByName done (${elapsedMs}ms) → global match "${bestGlobal.title}" by "${bestGlobal.artist}" (score=${bestGlobalScore.toFixed(1)}) not in any playlist, deferring to standalone`
@@ -546,7 +566,7 @@ export class IndexingManager {
     const matched = this.searchSong(songName);
     if (matched.length === 0) return null;
 
-    const bestScore = scoreSongMatch(songName, matched[0].title, matched[0].artist);
+    const bestScore = scoreSongMatchLower(songName.toLowerCase(), matched[0].titleLower, matched[0].artistLower);
     if (bestScore < MIN_MATCH_SCORE) {
       songloft.log.info(`[IndexingManager] findStandaloneSongByName: best match "${matched[0].title}" by "${matched[0].artist}" score=${bestScore.toFixed(1)} below threshold, skipping`);
       return null;
