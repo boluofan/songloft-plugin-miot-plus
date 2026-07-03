@@ -18,6 +18,12 @@ import {
 import type { XiaomiTokenInfo, MinaDevice, AskMessage } from '../types';
 import type { DeviceInfoRaw, DeviceListResponse, UbusResponse, NlpResultData, NlpInfoData, NlpDetail, ConversationData, MusicSearchResponse } from './models';
 
+// 轮询链路调试日志开关。会话监听默认每秒轮询，稳态（无新消息）下这些 info 日志
+// 每 tick 都要构造模板字符串并跨 __go_console 桥（实测约 334µs/次/设备 + 日志刷屏）。
+// 默认关闭以消除稳态开销；排障时改为 true。用 if(POLL_DEBUG) 内联门控，关闭时
+// 连字符串都不构造。
+const POLL_DEBUG = false;
+
 /**
  * MinaHTTPClient - 小爱音箱 API 客户端
  * 提供设备控制、播放管理、对话记录获取等功能
@@ -330,27 +336,27 @@ export class MinaHTTPClient {
    * @param limit - 记录数量限制（默认2）
    */
   async getLatestAskFromXiaoai(deviceId: string, hardware: string, limit = 2): Promise<AskMessage[]> {
-    songloft.log.info(`[ConversationMonitor] getLatestAskFromXiaoai deviceId=${deviceId} hardware=${hardware} limit=${limit} useMinaForAsk=${shouldUseMinaForAsk(hardware)}`);
+    if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] getLatestAskFromXiaoai deviceId=${deviceId} hardware=${hardware} limit=${limit} useMinaForAsk=${shouldUseMinaForAsk(hardware)}`);
     // 部分设备需要通过 ubus 方式获取
     if (shouldUseMinaForAsk(hardware)) {
       const ubusResult = await this.getLatestAskByUbus(deviceId);
-      songloft.log.info(`[ConversationMonitor] getLatestAskByUbus result: ${ubusResult ? ubusResult.length : 0} messages`);
+      if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] getLatestAskByUbus result: ${ubusResult ? ubusResult.length : 0} messages`);
       return ubusResult;
     }
 
     // 与 Go 版一致：在循环外部生成时间戳，重试时复用相同 URL
     const timestamp = Date.now();
     const apiUrl = formatLatestAskUrl(hardware, timestamp, limit);
-    songloft.log.info(`[ConversationMonitor] getLatestAskFromXiaoai apiUrl=${apiUrl}`);
+    if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] getLatestAskFromXiaoai apiUrl=${apiUrl}`);
 
     // 大多数设备通过 xiaoai API 获取，带3次重试
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       const messages = await this.doGetLatestAskFromXiaoai(deviceId, apiUrl);
       if (messages !== null) {
-        songloft.log.info(`[ConversationMonitor] getLatestAskFromXiaoai attempt=${attempt} success, ${messages.length} messages`);
+        if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] getLatestAskFromXiaoai attempt=${attempt} success, ${messages.length} messages`);
         return messages;
       }
-      songloft.log.info(`[ConversationMonitor] getLatestAskFromXiaoai attempt=${attempt} returned null, retrying...`);
+      if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] getLatestAskFromXiaoai attempt=${attempt} returned null, retrying...`);
     }
     songloft.log.info(`[ConversationMonitor] getLatestAskFromXiaoai all ${MAX_RETRIES} attempts failed`);
     return [];
@@ -549,14 +555,14 @@ export class MinaHTTPClient {
       const fetchResult = await fetchWithRedirects(apiUrl, { method: 'GET', headers }, new CookieJar(), 0);
       response = fetchResult.response;
     } catch (e) {
-      songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai fetch error: ${String(e)}`);
+      songloft.log.warn(`[ConversationMonitor] doGetLatestAskFromXiaoai fetch error: ${String(e)}`);
       return null;
     }
 
-    songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai status=${response.status}`);
+    if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai status=${response.status}`);
 
     if (response.status === 401) {
-      songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai 401 token expired`);
+      if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai 401 token expired`);
       if (this.onTokenExpired) {
         await this.onTokenExpired();
       }
@@ -564,27 +570,27 @@ export class MinaHTTPClient {
     }
 
     if (response.status !== 200) {
-      songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai unexpected status=${response.status}`);
+      songloft.log.warn(`[ConversationMonitor] doGetLatestAskFromXiaoai unexpected status=${response.status}`);
       return null;
     }
 
     try {
       const text = response.text() as string;
       // 打印原始响应体（最多 1000 字符）
-      songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai raw response (${text.length} chars): ${text.substring(0, 1000)}`);
+      if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai raw response (${text.length} chars): ${text.substring(0, 1000)}`);
 
       const result = JSON.parse(text) as Record<string, unknown>;
 
       // data 字段是一个 JSON 字符串
       const dataStr = result['data'] as string;
       if (!dataStr) {
-        songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai data field is empty/null`);
+        if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai data field is empty/null`);
         return [];
       }
 
       const dataObj = JSON.parse(dataStr) as ConversationData;
       if (!dataObj.records || dataObj.records.length === 0) {
-        songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai records empty or missing`);
+        if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai records empty or missing`);
         return [];
       }
 
@@ -603,10 +609,10 @@ export class MinaHTTPClient {
           },
         };
       });
-      songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai parsed ${messages.length} messages`);
+      if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai parsed ${messages.length} messages`);
       return messages;
     } catch (e) {
-      songloft.log.info(`[ConversationMonitor] doGetLatestAskFromXiaoai parse error: ${String(e)}`);
+      songloft.log.warn(`[ConversationMonitor] doGetLatestAskFromXiaoai parse error: ${String(e)}`);
       return null;
     }
   }

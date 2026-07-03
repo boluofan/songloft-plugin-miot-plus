@@ -629,6 +629,17 @@ function encodeFormData(params: Record<string, string>): string {
  */
 function computeClientSign(nonce: string, ssecurity: string): string {
   const input = `nonce=${nonce}&${ssecurity}`;
+  // 优先用宿主原生 SHA1（QuickJS 解释执行下纯 JS SHA1 慢）；老运行时（无
+  // crypto.sha1）自动回退到下方纯 JS 实现，保证兼容。
+  const nativeSha1 = (globalThis as { crypto?: { sha1?(s: string): string } }).crypto?.sha1;
+  if (typeof nativeSha1 === 'function') {
+    const hex = nativeSha1(input);
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    }
+    return btoa(String.fromCharCode(...bytes));
+  }
   const hash = sha1(input);
   return btoa(String.fromCharCode(...hash));
 }
