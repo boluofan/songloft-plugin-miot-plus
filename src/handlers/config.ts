@@ -8,6 +8,7 @@ import { ConversationMonitor } from '../conversation/monitor';
 import { Scheduler } from '../schedule/scheduler';
 import { VoiceEngine } from '../voicecmd/engine';
 import { setHostBaseUrl, callHostAPI } from '../utils/http';
+import { setPollDebug } from '../utils/debug';
 
 /** 解析请求体（兼容 Uint8Array 和 string） */
 function parseBody(req: HTTPRequest): any {
@@ -87,6 +88,7 @@ export function registerConfigHandlers(
           interrupt_tts_hint_enabled: !!config.interrupt_tts_hint_enabled,
           interrupt_tts_hint_text: config.interrupt_tts_hint_text || '正在搜索，请稍候',
           conversation_poll_interval: config.conversation_poll_interval ?? 1,
+          conversation_poll_debug: !!config.conversation_poll_debug,
           smart_resume_timeout: config.smart_resume_timeout ?? 30,
           max_song_index: config.max_song_index ?? 10000,
           server_host_status: getServerHostStatus(config.server_host),
@@ -208,6 +210,12 @@ export function registerConfigHandlers(
           conversationMonitor.stop();
           conversationMonitor.start();
         }
+      }
+
+      // 更新 conversation_poll_debug（同步到 debug 模块的缓存，热路径靠它门控日志）
+      if (body.conversation_poll_debug !== undefined) {
+        config.conversation_poll_debug = !!body.conversation_poll_debug;
+        setPollDebug(config.conversation_poll_debug);
       }
 
       // 更新 smart_resume_timeout

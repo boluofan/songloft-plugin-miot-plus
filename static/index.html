@@ -363,6 +363,18 @@
                         <div style="margin-top:4px;font-size:12px;color:#999">检测语音指令的频率，值越小响应越快，1-30 秒</div>
                     </div>
 
+                    <!-- 轮询调试日志 -->
+                    <div class="switch-row" style="margin-top:12px">
+                        <div class="switch-row-label">
+                            <span class="switch-row-title">轮询调试日志</span>
+                            <span class="switch-row-subtitle">开启后打印每次轮询的详细日志，仅排障时使用；常态请保持关闭以减少开销与日志刷屏</span>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="conversationPollDebugSwitch" aria-label="轮询调试日志">
+                            <span class="switch-slider"></span>
+                        </label>
+                    </div>
+
                     <!-- 监听状态 -->
                     <div id="conversationStatusPanel" style="display:none;margin-top:12px">
                         <div class="status-chips" id="conversationDeviceChips"></div>

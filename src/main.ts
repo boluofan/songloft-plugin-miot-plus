@@ -24,6 +24,7 @@ import { registerScheduleHandlers } from './handlers/schedule';
 import { registerVoiceCommandHandlers } from './handlers/voice_command';
 import { registerIndexingHandlers } from './handlers/indexing';
 import { setHostBaseUrl } from './utils/http';
+import { setPollDebug } from './utils/debug';
 
 const router = createRouter();
 
@@ -57,6 +58,9 @@ async function onInit(): Promise<void> {
     setHostBaseUrl(pluginConfig.server_host);
     songloft.log.info('宿主 API 基础 URL 已设置: ' + pluginConfig.server_host);
   }
+
+  // 同步轮询调试日志开关到 debug 模块缓存（热路径同步读取，不能每 tick await 配置）
+  setPollDebug(pluginConfig.conversation_poll_debug ?? false);
 
   conversationMonitor = new ConversationMonitor(accountManager, configManager);
   voiceEngine = new VoiceEngine(configManager, accountManager, minaService, playlistManagerMap, indexingManager, new AIAnalyzer());

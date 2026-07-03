@@ -186,6 +186,12 @@ export function loadConfig() {
                 pollIntervalInput.value = data.data.conversation_poll_interval ?? 1;
             }
 
+            // 轮询调试日志开关
+            const pollDebugSwitch = document.getElementById('conversationPollDebugSwitch');
+            if (pollDebugSwitch) {
+                pollDebugSwitch.checked = !!data.data.conversation_poll_debug;
+            }
+
             // 语音恢复超时
             const smartResumeInput = document.getElementById('smartResumeTimeout');
             if (smartResumeInput) {
@@ -352,6 +358,30 @@ export function initPollIntervalUI() {
                 }
             })
             .catch(error => showSnackbar('保存失败：' + error.message, 'error'));
+    });
+}
+
+/**
+ * 初始化轮询调试日志开关 UI
+ */
+export function initConversationPollDebugUI() {
+    const switchEl = document.getElementById('conversationPollDebugSwitch');
+    if (!switchEl) return;
+    switchEl.addEventListener('change', function() {
+        const enabled = this.checked;
+        apiPost('/config', { conversation_poll_debug: enabled })
+            .then(data => {
+                if (data.success) {
+                    showSnackbar(enabled ? '已开启轮询调试日志' : '已关闭轮询调试日志', 'success');
+                } else {
+                    showSnackbar('操作失败：' + (data.error || '未知错误'), 'error');
+                    switchEl.checked = !enabled;
+                }
+            })
+            .catch(error => {
+                showSnackbar('操作失败：' + error.message, 'error');
+                switchEl.checked = !enabled;
+            });
     });
 }
 

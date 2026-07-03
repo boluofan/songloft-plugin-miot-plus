@@ -8,10 +8,7 @@ import { AccountManager } from '../account/manager';
 import { ConfigManager } from '../config/manager';
 import type { ConversationMessage, AskMessage, WebhookConfig } from '../types';
 import { MinaHTTPClient } from '../mina/client';
-
-// 轮询链路调试日志开关。默认每秒轮询，稳态（无新消息）下这些 info 日志每 tick
-// 都构造字符串并跨 __go_console 桥，纯浪费且刷屏。默认关闭；排障时改 true。
-const POLL_DEBUG = false;
+import { isPollDebug } from '../utils/debug';
 
 // ===== 类型定义 =====
 
@@ -319,7 +316,7 @@ export class ConversationMonitor {
 
     // 打印返回的消息数量和内容摘要（稳态无消息时不打，避免每 tick 构造字符串+刷屏）
     const msgCount = askMessages ? askMessages.length : 0;
-    if (POLL_DEBUG && msgCount > 0) {
+    if (isPollDebug() && msgCount > 0) {
       const summary = askMessages.map(m => {
         const q = m.response?.answer?.[0]?.question ?? '?';
         return `[ts=${m.timestamp_ms} q="${q.substring(0, 50)}"]`;
@@ -352,7 +349,7 @@ export class ConversationMonitor {
     }
 
     // 打印过滤结果（稳态无新消息时不打）
-    if (POLL_DEBUG) songloft.log.info(`[ConversationMonitor] pollDevice device=${dm.deviceId} after filter: ${newMessages.length} new (lastTimestampMs=${dm.lastTimestampMs})`);
+    if (isPollDebug()) songloft.log.info(`[ConversationMonitor] pollDevice device=${dm.deviceId} after filter: ${newMessages.length} new (lastTimestampMs=${dm.lastTimestampMs})`);
 
     if (newMessages.length === 0) {
       return;
