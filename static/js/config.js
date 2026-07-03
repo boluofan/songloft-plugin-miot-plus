@@ -649,6 +649,11 @@ function renderSearchProviders(select, providers, currentProviderId) {
 
     if (currentProviderId && currentProviderId !== 'custom') {
         select.value = currentProviderId;
+        // 目标源已卸载（选项不存在）时 select.value 不会生效，回落到自定义并展示已保存的 URL
+        if (select.value !== currentProviderId) {
+            select.value = 'custom';
+            updateProviderUI('custom');
+        }
     }
 }
 
