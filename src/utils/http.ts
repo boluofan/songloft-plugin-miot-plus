@@ -282,32 +282,69 @@ export async function fetchJSON<T = unknown>(url: string, options: FetchOptions 
 // ===== 宿主 API 调用 =====
 
 let _hostBaseUrl = '';
+let _hostAPIBaseUrl = '';
 
-/** 获取宿主 API 基础 URL */
+export interface HostAPICallOptions {
+  timeoutMs?: number;
+}
+
+function normalizeBaseUrl(url: string): string {
+  const trimmed = (url || '').trim();
+  return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+}
+
+/** 获取播放 URL 基础地址（供音箱访问） */
 export function getHostBaseUrl(): string {
   return _hostBaseUrl;
 }
 
-/** 设置宿主 API 基础 URL（如 "http://127.0.0.1:58091"） */
+/** 设置播放 URL 基础地址（如 "http://192.168.x.x:58091"） */
 export function setHostBaseUrl(url: string): void {
-  _hostBaseUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+  _hostBaseUrl = normalizeBaseUrl(url);
+}
+
+async function getHostAPIBaseUrl(): Promise<string> {
+  if (_hostAPIBaseUrl) {
+    return _hostAPIBaseUrl;
+  }
+
+  try {
+    const hostUrl = await songloft.plugin.getHostUrl();
+    if (hostUrl) {
+      _hostAPIBaseUrl = normalizeBaseUrl(hostUrl);
+      return _hostAPIBaseUrl;
+    }
+  } catch (e) {
+    songloft.log.warn('[http] failed to get local host API URL, falling back to configured server_host: ' + String(e));
+  }
+
+  if (_hostBaseUrl) {
+    return _hostBaseUrl;
+  }
+  throw new Error('Host API base URL not available.');
 }
 
 /** 调用 Songloft 宿主 API（自动携带 Bearer token） */
-export async function callHostAPI<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-  if (!_hostBaseUrl) {
-    throw new Error('Host base URL not set. Call setHostBaseUrl() first.');
-  }
+export async function callHostAPI<T = unknown>(
+  method: string,
+  path: string,
+  body?: unknown,
+  options: HostAPICallOptions = {},
+): Promise<T> {
   const pluginToken = await songloft.plugin.getToken();
   if (!pluginToken) {
     throw new Error('Plugin token not available from songloft.plugin.getToken()');
   }
 
-  const url = _hostBaseUrl + path;
+  const baseUrl = await getHostAPIBaseUrl();
+  const url = baseUrl + (path.startsWith('/') ? path : '/' + path);
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${pluginToken}`,
     'Accept': 'application/json',
   };
+  if (options.timeoutMs && options.timeoutMs > 0) {
+    headers['X-Fetch-Timeout-Ms'] = String(options.timeoutMs);
+  }
   let bodyStr: string | undefined;
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';

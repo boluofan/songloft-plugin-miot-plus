@@ -52,11 +52,11 @@ async function onInit(): Promise<void> {
   minaService = new MinaService(accountManager, configManager);
   playlistManagerMap = new PlaylistManagerMap(minaService, configManager);
 
-  // 从配置中读取服务器地址并设置宿主 API 基础 URL
+  // 从配置中读取服务器地址并设置音箱播放 URL 基础地址
   const pluginConfig = await configManager.getConfig();
   if (pluginConfig.server_host) {
     setHostBaseUrl(pluginConfig.server_host);
-    songloft.log.info('宿主 API 基础 URL 已设置: ' + pluginConfig.server_host);
+    songloft.log.info('音箱播放 URL 基础地址已设置: ' + pluginConfig.server_host);
   }
 
   // 同步轮询调试日志开关到 debug 模块缓存（热路径同步读取，不能每 tick await 配置）

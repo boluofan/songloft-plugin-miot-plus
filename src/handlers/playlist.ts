@@ -4,9 +4,10 @@
 import { jsonResponse, parseQuery } from '@songloft/plugin-sdk';
 import type { Router, HTTPRequest } from '@songloft/plugin-sdk';
 import { PlaylistManagerMap } from '../player/manager';
+import type { PlaylistManager } from '../player/manager';
 import { MinaService } from '../service/service';
 import { ConfigManager } from '../config/manager';
-import type { PlayMode } from '../types';
+import type { PlayMode, PlayState } from '../types';
 
 /** 解析请求体（兼容 Uint8Array 和 string） */
 function parseBody(req: HTTPRequest): any {
@@ -65,6 +66,41 @@ export function updateDeviceStatusCache(accountId: string, deviceId: string, dat
 /** 获取设备状态缓存 */
 export function getDeviceStatusCache(accountId: string, deviceId: string): DeviceStatusCache | undefined {
   return deviceStatusCache.get(accountId + ':' + deviceId);
+}
+
+function syncManagerFromDeviceState(
+  manager: PlaylistManager,
+  localState: PlayState,
+  deviceState: string,
+  devicePosition: number,
+): void {
+  // 小爱在 URL/MUSIC 播放模式下会偶发把正常播放的流上报成 paused/stopped。
+  // 读状态接口不能因此清掉本地自动切歌定时器；只有设备确认在播放时才用它校准恢复。
+  if (localState === 'paused' && deviceState === 'playing') {
+    manager.resetAutoNextTimer(devicePosition);
+  } else if (localState === 'playing' && deviceState === 'playing' && manager.isVoiceSuspended()) {
+    manager.resetAutoNextTimer(devicePosition);
+  }
+}
+
+function resolveReportState(localState: PlayState, deviceState: string): string {
+  if (localState === 'stopped') {
+    return 'stopped';
+  }
+  if (localState === 'playing' && (deviceState === 'paused' || deviceState === 'stopped')) {
+    return 'playing';
+  }
+  return deviceState;
+}
+
+function resolveReportPosition(localState: PlayState, deviceState: string, localPosition: number, devicePosition: number): number {
+  if (localState === 'stopped') {
+    return 0;
+  }
+  if (localState === 'playing' && deviceState !== 'playing') {
+    return localPosition;
+  }
+  return devicePosition;
 }
 
 /**
@@ -344,7 +380,7 @@ export function registerPlaylistHandlers(
     }
   });
 
-  // GET /player/status - 获取播放状态（设备真实数据优先，带缓存避免重复查询）
+  // GET /player/status - 获取播放状态（本地播放状态优先，设备数据用于音量/进度校准）
   router.get('/player/status', async (req: HTTPRequest) => {
     try {
       const query = parseQuery(req.query);
@@ -371,30 +407,11 @@ export function registerPlaylistHandlers(
           position = Math.min(cached.position + elapsed, duration);
         }
 
-        // 设备状态与本地 PlaylistManager 不一致时同步（防止外部操作如"小爱同学停止"后本地定时器仍在跑）
-        if (cached.state !== localStatus.state) {
-          if (localStatus.state === 'playing' && cached.state === 'paused') {
-            manager.suspendForVoiceInteraction();
-          } else if (localStatus.state === 'playing' && cached.state === 'stopped') {
-            if (manager.isVoiceSuspendStale()) {
-              manager.prepareForNewPlayback();
-            } else {
-              manager.suspendForVoiceInteraction();
-            }
-          } else if (localStatus.state === 'paused' && cached.state === 'playing') {
-            // 本地显示暂停但设备在播放，同步设备状态
-            manager.resetAutoNextTimer(cached.position);
-          }
-        }
-
-        // 设备和本地都是 playing 但定时器被挂起时，重启定时器
-        if (localStatus.state === 'playing' && cached.state === 'playing' && manager.isVoiceSuspended()) {
-          manager.resetAutoNextTimer(cached.position);
-        }
+        syncManagerFromDeviceState(manager, localStatus.state, cached.state, cached.position);
 
         // 本地已 stop 时，不让设备残留的播放状态覆盖，避免前端进度条跳动
-        const reportState = localStatus.state === 'stopped' ? 'stopped' : cached.state;
-        const reportPosition = localStatus.state === 'stopped' ? 0 : position;
+        const reportState = resolveReportState(localStatus.state, cached.state);
+        const reportPosition = resolveReportPosition(localStatus.state, cached.state, localStatus.position, position);
 
         return jsonResponse({
           success: true,
@@ -439,30 +456,11 @@ export function registerPlaylistHandlers(
       // 更新缓存
       deviceStatusCache.set(cacheKey, { volume, state: realState, position: realPosition, duration: realDuration, timestamp: now, volumeLockedUntil: cached?.volumeLockedUntil ?? 0 });
 
-      // 设备状态与本地不一致时同步（同缓存命中路径逻辑）
-      if (realState !== localStatus.state) {
-        if (localStatus.state === 'playing' && realState === 'paused') {
-          manager.suspendForVoiceInteraction();
-        } else if (localStatus.state === 'playing' && realState === 'stopped') {
-          if (manager.isVoiceSuspendStale()) {
-            manager.prepareForNewPlayback();
-          } else {
-            manager.suspendForVoiceInteraction();
-          }
-        } else if (localStatus.state === 'paused' && realState === 'playing') {
-          // 本地显示暂停但设备在播放，同步设备状态
-          manager.resetAutoNextTimer(realPosition);
-        }
-      }
-
-      // 设备和本地都是 playing 但定时器被挂起时，重启定时器
-      if (localStatus.state === 'playing' && realState === 'playing' && manager.isVoiceSuspended()) {
-        manager.resetAutoNextTimer(realPosition);
-      }
+      syncManagerFromDeviceState(manager, localStatus.state, realState, realPosition);
 
       // 本地已 stop 时，不让设备残留的播放状态覆盖
-      const reportState = localStatus.state === 'stopped' ? 'stopped' : realState;
-      const reportPosition = localStatus.state === 'stopped' ? 0 : realPosition;
+      const reportState = resolveReportState(localStatus.state, realState);
+      const reportPosition = resolveReportPosition(localStatus.state, realState, localStatus.position, realPosition);
 
       return jsonResponse({
         success: true,
