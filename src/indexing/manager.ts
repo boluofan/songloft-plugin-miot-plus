@@ -296,9 +296,26 @@ function tokenizeQuery(query: string): QueryTokens {
   return { tokens, pys };
 }
 
+function isCJKRune(ch: string): boolean {
+  const cp = ch.codePointAt(0) ?? 0;
+  return (cp >= 0x3400 && cp <= 0x4dbf) || (cp >= 0x4e00 && cp <= 0x9fff) || (cp >= 0xf900 && cp <= 0xfaff);
+}
+
+function isCJKDirectMatch(tokens: string[], titleLower: string, artistLower: string): boolean {
+  const directText = titleLower + artistLower;
+  for (const token of tokens) {
+    for (const ch of Array.from(token)) {
+      if (isCJKRune(ch) && !directText.includes(ch)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 /**
  * 单个 token 对单个字段的匹配强度（0..1，未含字段权重）。
- * 逐级：完全相等 → 字段含 token → token 含字段 → 编辑距离模糊 → 拼音（同音字）。
+ * 逐级：完全相等 → 字段含 token → token 含字段 → 编辑距离模糊 → 拼音。
  */
 function matchTokenStrength(token: string, tokenPy: string, fieldLower: string, fieldPy: string): number {
   if (!fieldLower || !token) return 0;
@@ -317,7 +334,7 @@ function matchTokenStrength(token: string, tokenPy: string, fieldLower: string, 
     const sim = similarityLower(token, fieldLower);
     if (sim >= 0.6) return sim * 0.7;
 
-    // 拼音层（同音字，如"青天"↔"晴天"）
+    // 拼音层：主要服务 xiaoyu 这类拉丁拼音输入；中文 query 会先经过字面校验，避免同音字误播。
     if (tokenPy && fieldPy) {
       if (fieldPy.includes(tokenPy)) return 0.62;
       const simPy = similarityLower(tokenPy, fieldPy);
@@ -345,6 +362,7 @@ function scoreSongTokens(
 ): number {
   const { tokens, pys } = q;
   if (tokens.length === 0) return 0;
+  if (!isCJKDirectMatch(tokens, titleLower, artistLower)) return 0;
 
   let weightedSum = 0;
   let matched = 0;
