@@ -4,9 +4,10 @@
 /// <reference types="@songloft/plugin-sdk" />
 
 import { MinaService } from '../service/service';
-import { getHostBaseUrl } from '../utils/http';
+import { getHostAPIBaseUrl } from '../utils/http';
 import { URLBuilder } from '../player/url_builder';
 import { ConfigManager } from '../config/manager';
+import { IndexingManager } from '../indexing/manager';
 
 // 外部搜索 API 请求体
 interface SearchOneRequest {
@@ -108,8 +109,8 @@ export class OnlineSearcher {
       return searchUrl;
     }
 
-    // 相对路径，拼接服务器地址
-    const host = getHostBaseUrl();
+    // 相对路径 = 内部插件/宿主接口，走 loopback API 地址（避免 hairpin NAT）
+    const host = await getHostAPIBaseUrl();
     return host + searchUrl;
   }
 
@@ -158,6 +159,7 @@ export class OnlineSearcher {
     try {
       const baseUrl = await this.getSearchBaseUrl();
       const authToken = await this.getAuthToken();
+      songloft.log.info('[OnlineSearcher] [Diag] Request POST ' + baseUrl + ' body=' + JSON.stringify(reqBody));
       const fetchPromise = fetch(baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: authToken },
@@ -166,6 +168,7 @@ export class OnlineSearcher {
       const fetchResp = await Promise.race([fetchPromise, timeoutPromise]);
 
       const text = await fetchResp.text();
+      songloft.log.info('[OnlineSearcher] [Diag] Response status=' + fetchResp.status + ' body=' + text);
       try {
         resp = JSON.parse(text) as SearchOneResponse;
       } catch {
@@ -198,6 +201,7 @@ export class OnlineSearcher {
     accountId: string,
     deviceId: string,
     minaService: MinaService,
+    indexingManager?: IndexingManager,
   ): Promise<boolean> {
     const config = await this.configManager.getConfig();
 
@@ -210,14 +214,18 @@ export class OnlineSearcher {
 
     // 入库后追加到目标歌单（可选，由配置决定）
     const pid = config.external_search_playlist_id;
+    let appendedPlaylistId: number | undefined;
     if (pid) {
       try {
         const plToken = await songloft.plugin.getToken();
-        await fetch(`${getHostBaseUrl()}/api/v1/playlists/${pid}/songs`, {
+        const apiBase = await getHostAPIBaseUrl();
+        await fetch(`${apiBase}/api/v1/playlists/${pid}/songs`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${plToken}` },
           body: JSON.stringify({ song_ids: [imported.id] }),
         });
+        const pidNum = Number(pid);
+        if (!Number.isNaN(pidNum)) appendedPlaylistId = pidNum;
       } catch (e) { songloft.log.warn(`[OnlineSearcher] 追加歌单失败: ${String(e)}`); }
     }
 
@@ -230,11 +238,21 @@ export class OnlineSearcher {
 
     // 推送 URL 到音箱（传「歌名-歌手」供触屏歌词模式匹配曲库）
     const songName = song.artist ? `${song.title}-${song.artist}` : song.title;
+    songloft.log.info('[OnlineSearcher] [Diag] Push to device: songName="' + songName + '" importedUrl="' + imported.url + '" playUrl="' + playUrl + '"');
     const played = await minaService.playURL(accountId, deviceId, playUrl, songName);
     if (!played) {
       songloft.log.error('[OnlineSearcher] Failed to push URL to device: ' + playUrl);
       return false;
     }
+
+    // 增量把这首独立远程歌曲加入内存索引，避免为一首歌重建全部歌单缓存。
+    if (indexingManager) {
+      indexingManager.addImportedSong(
+        { id: imported.id, title: song.title, artist: song.artist, album: song.album },
+        appendedPlaylistId,
+      );
+    }
+
     songloft.log.info('[OnlineSearcher] Playing online song: ' + song.title + ' - ' + song.artist + ' url=' + playUrl);
     return true;
   }
@@ -287,7 +305,7 @@ export class OnlineSearcher {
 
     try {
       const pluginToken = await songloft.plugin.getToken();
-      const serverHost = getHostBaseUrl();
+      const serverHost = await getHostAPIBaseUrl();
       const fetchResp = await fetch(serverHost + '/api/v1/songs/remote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pluginToken}` },

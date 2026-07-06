@@ -866,6 +866,62 @@ export class IndexingManager {
   }
 
   /**
+   * 增量把一首刚导入的歌曲加入内存索引。
+   *
+   * 外部搜索导入的是一首独立远程歌曲，只影响歌曲索引本身（以及可选的单个目标歌单），
+   * 无需为它重建全部歌单缓存（原先每导入一首触发一次全量 refresh，会逐首重拉所有歌单）。
+   *
+   * - 按 id upsert 进 this.songs，使 searchSong / findStandaloneSongByName 后续可本地命中；
+   * - 仅当 playlistId 指定且该歌单缓存已加载时，把这一首追加进该歌单缓存并把 songCount +1；
+   *   歌单缓存尚未加载则跳过（后台加载会从服务端拉到已追加的完整列表）。
+   */
+  addImportedSong(
+    song: { id: number; title: string; artist?: string; album?: string },
+    playlistId?: number,
+  ): void {
+    const title = song.title ?? '';
+    const artist = song.artist ?? '';
+    const album = song.album ?? '';
+    const titleLower = title.toLowerCase();
+    const artistLower = artist.toLowerCase();
+    const albumLower = album.toLowerCase();
+    const titlePinyin = getCachedPinyin(title);
+    const artistPinyin = getCachedPinyin(artist);
+    const albumPinyin = getCachedPinyin(album);
+
+    const entry: IndexedSong = {
+      id: song.id,
+      title, artist, album,
+      titleLower, artistLower, albumLower,
+      titlePinyin, artistPinyin, albumPinyin,
+    };
+
+    const existingIdx = this.songs.findIndex(s => s.id === song.id);
+    if (existingIdx >= 0) {
+      this.songs[existingIdx] = entry;
+    } else {
+      this.songs.push(entry);
+    }
+
+    if (playlistId !== undefined && playlistId !== null && !Number.isNaN(playlistId)) {
+      const cached = this.playlistSongsCache.get(playlistId);
+      if (cached && !cached.some(s => s.id === song.id)) {
+        cached.push({
+          id: song.id,
+          title, artist, album,
+          titleLower, artistLower, albumLower,
+          titlePinyin, artistPinyin, albumPinyin,
+        });
+        const pl = this.playlists.find(p => p.id === playlistId);
+        if (pl) pl.songCount += 1;
+      }
+    }
+
+    this.indexReady = true;
+    songloft.log.info(`[IndexingManager] 增量索引: 已加入歌曲 id=${song.id} "${title}"${playlistId ? ` playlist=${playlistId}` : ''} (songs=${this.songs.length})`);
+  }
+
+  /**
    * 索引是否就绪
    */
   isIndexReady(): boolean {

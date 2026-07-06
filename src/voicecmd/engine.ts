@@ -268,7 +268,9 @@ export class VoiceEngine {
    * @param accountId - 可选，缺省时按 deviceId 反查
    */
   async testCommand(query: string, deviceId: string, accountId?: string): Promise<CommandTestResult> {
+    const testStart = Date.now();
     const q = (query || '').trim();
+    songloft.log.info(`[VoiceEngine] [Test] start query="${q}" deviceId=${deviceId}`);
     if (!q) {
       return { matched: false, source: 'none', executed: false, note: '查询为空' };
     }
@@ -284,10 +286,14 @@ export class VoiceEngine {
     // AI 路径（与 handleMessage 一致：高置信度且识别到有效 action 才执行）
     const aiConfig = await this.configManager.getAIConfig();
     if (aiConfig.enabled) {
+      const aiStart = Date.now();
       const aiResult = await this.aiAnalyzer.analyze(q, aiConfig);
+      songloft.log.info(`[VoiceEngine] [Test] AI analyze done in ${Date.now() - aiStart}ms → ${aiResult ? `action=${aiResult.action} confidence=${aiResult.confidence}` : 'null'}`);
       if (aiResult && aiResult.confidence === 'high' && aiResult.action !== 'unknown') {
         const search = await this.previewForAI(aiResult);
+        const execStart = Date.now();
         await this.executeAIResult(aiResult, acc, deviceId);
+        songloft.log.info(`[VoiceEngine] [Test] AI execute done in ${Date.now() - execStart}ms (total ${Date.now() - testStart}ms)`);
         return {
           matched: true,
           source: 'ai',
@@ -314,12 +320,18 @@ export class VoiceEngine {
 
   /** 规则匹配测试：匹配 + 执行 + 返回诊断 */
   private async testRule(query: string, accountId: string, deviceId: string): Promise<CommandTestResult> {
+    const ruleStart = Date.now();
     const result = await this.matchCommand(query);
+    songloft.log.info(`[VoiceEngine] [Test] rule match done in ${Date.now() - ruleStart}ms → ${result ? `type=${result.command.type} keyword="${result.keyword}" argument="${result.argument}"` : 'no match'}`);
     if (!result) {
       return { matched: false, source: 'rule', executed: false, note: '未匹配到任何口令' };
     }
+    const previewStart = Date.now();
     const search = await this.previewSearch(result.command.type, result.argument);
+    songloft.log.info(`[VoiceEngine] [Test] previewSearch done in ${Date.now() - previewStart}ms`);
+    const execStart = Date.now();
     await this.executeCommand(result, accountId, deviceId);
+    songloft.log.info(`[VoiceEngine] [Test] executeCommand done in ${Date.now() - execStart}ms (total ${Date.now() - ruleStart}ms)`);
     return {
       matched: true,
       source: 'rule',
@@ -903,14 +915,11 @@ export class VoiceEngine {
       case 'remote_song':
         return await this.playStandaloneSong(candidate.song, accountId, deviceId);
       case 'external_search': {
-        const played = await this.onlineSearcher.playSearchResult(
-          candidate.song, accountId, deviceId, this.minaService,
+        // 外部搜索播放成功后，由 playSearchResult 增量把这首歌加入索引（见 addImportedSong），
+        // 后续可直接本地命中，无需为一首独立远程歌曲重建全部歌单缓存。
+        return await this.onlineSearcher.playSearchResult(
+          candidate.song, accountId, deviceId, this.minaService, this.indexingManager,
         );
-        if (played) {
-          // 外部搜索播放成功后刷新索引，后续可直接本地命中
-          await this.indexingManager.refresh();
-        }
-        return played;
       }
     }
   }

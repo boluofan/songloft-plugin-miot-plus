@@ -1280,14 +1280,16 @@ function initVoiceCommandTest() {
         testResult.style.color = 'var(--md-on-surface-variant)';
         testResult.textContent = '执行中...';
 
+        const startedAt = Date.now();
         try {
             const json = await apiPost('/voice-commands/test', {
                 query,
                 device_id: deviceId,
                 account_id: accountId || '',
             });
+            const elapsedMs = Date.now() - startedAt;
             if (json.success && json.data) {
-                renderVoiceCmdTestResult(testResult, json.data);
+                renderVoiceCmdTestResult(testResult, json.data, elapsedMs);
             } else {
                 testResult.style.color = 'var(--md-error)';
                 testResult.textContent = '测试失败: ' + (json.error || '未知错误');
@@ -1310,14 +1312,17 @@ function initVoiceCommandTest() {
  * 渲染口令测试结果
  * @param {HTMLElement} el - 结果容器
  * @param {object} d - CommandTestResult
+ * @param {number} [elapsedMs] - 请求耗时（毫秒）
  */
-function renderVoiceCmdTestResult(el, d) {
+function renderVoiceCmdTestResult(el, d, elapsedMs) {
+    const elapsedLine = typeof elapsedMs === 'number' ? '耗时: ' + elapsedMs + ' ms' : null;
     const lines = [];
 
     if (!d.matched) {
         el.style.color = 'var(--md-error)';
         lines.push('未匹配到口令');
         if (d.note) lines.push('说明: ' + d.note);
+        if (elapsedLine) lines.push(elapsedLine);
         el.textContent = lines.join('\n');
         return;
     }
@@ -1341,6 +1346,7 @@ function renderVoiceCmdTestResult(el, d) {
 
     lines.push(d.executed ? '已投放到所选设备执行' : '未执行');
     if (d.note) lines.push('说明: ' + d.note);
+    if (elapsedLine) lines.push(elapsedLine);
 
     el.textContent = lines.join('\n');
 }

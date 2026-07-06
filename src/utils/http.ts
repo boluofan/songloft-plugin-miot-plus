@@ -303,7 +303,7 @@ export function setHostBaseUrl(url: string): void {
   _hostBaseUrl = normalizeBaseUrl(url);
 }
 
-async function getHostAPIBaseUrl(): Promise<string> {
+export async function getHostAPIBaseUrl(): Promise<string> {
   if (_hostAPIBaseUrl) {
     return _hostAPIBaseUrl;
   }
