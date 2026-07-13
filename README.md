@@ -34,6 +34,60 @@ npm run validate    # verify plugin.json hashes
 - 每次发版会自动滚动到最新数据;长期未更新的插件版本可能缺失最新节假日,建议定期升级插件。
 - 数据下载产物已 commit 入库,本地无网络也可构建。
 
+## 作为搜索源接入 miot（供插件开发者）
+
+miot 在本地曲库搜不到歌时,会调用用户配置的「外部搜索源」把歌找回来推给音箱。任何插件只要实现了搜索接口,就能把自己**登记为候选**,出现在 miot 配置页的搜索源下拉里供用户一键选用——不必再靠 miot 写死内置列表。
+
+接入分两步:
+
+### 1. 实现搜索接口 `/api/search/topone`
+
+`POST`,请求/响应遵循 topone 规范(完整定义见 miot 配置页「外部搜索」区的**「接口规范」**对话框):
+
+- 请求体 `{ keyword, hint?: { title, artist, duration }, quality? }`
+- 成功响应 `{ code: 0, msg, data: { title, artist, album?, duration?, cover_url?, url?, plugin_entry_path?, source_data?, dedup_key?, lyric?, lyric_source? } }`
+- 未命中 / 失败返回 `code != 0`、`data: null`;**超时 6 秒**
+
+内置的 `ytdlp` / `bili` / `subsonic` 即此规范的参考实现。
+
+### 2. 经插件间通信(`songloft.comm`)注册为候选
+
+在你的 `plugin.json` 声明 `inter-plugin` 权限,并在 `onInit` 里向 miot 注册:
+
+```ts
+// 延迟 + 重试,规避与 miot 同时启动的竞态;
+// miot 未安装 / 旧版 host 无 comm 时静默跳过,绝不阻塞自身功能。
+function registerToMiot() {
+  let attempts = 0;
+  const tryRegister = async () => {
+    attempts++;
+    try {
+      if (!songloft.comm || typeof songloft.comm.call !== 'function') return;
+      await songloft.comm.call('miot', 'register-search-provider', {
+        name: '我的音源',                  // 下拉显示名
+        searchPath: '/api/search/topone',  // 你的搜索路由(默认即此,可省)
+        icon: '',                          // 可选
+      });
+    } catch (e) {
+      if (attempts < 5) setTimeout(tryRegister, 3000);
+    }
+  };
+  setTimeout(tryRegister, 2000);
+}
+```
+
+| action | 说明 |
+|--------|------|
+| `register-search-provider` | 注册 / 更新候选(幂等,按 entryPath 覆盖,每次 onInit 重复调用即可) |
+| `unregister-search-provider` | 注销候选(可选,一般在 onDeinit 调用;payload 传空即可) |
+
+要点:
+
+- **不用传 entryPath**:miot 以宿主注入的**可信调用方身份**为准(`from`),插件无法把自己伪造成别的插件。
+- **payload 字段**:`name`(显示名,缺省用 entryPath)、`searchPath`(默认 `/api/search/topone`)、`icon`(可选)。
+- **纯增强、无副作用**:注册只是让你出现在候选下拉;是否启用由用户在配置页决定。miot 会通过宿主插件列表校验你的 `installed/active` 状态,你被卸载后会自动从列表消失。
+- **向后兼容**:内置 `ytdlp/bili/subsonic` 也走这套注册流程,同时保留在 miot 的内置 fallback 列表中,兼容尚未接入的旧版本。
+
 ## Author
 
 hanxi
